@@ -31,6 +31,11 @@ const items = [
     to: "/caja",
     icon: <IconifyIcon icon="solar:cash-out-line-duotone" />,
   },
+  {
+    label: "Ventas",
+    to: "/ventas",
+    icon: <IconifyIcon icon="solar:history-2-line-duotone" />,
+  },
 ];
 
 export function Sidebar({ isOpen, onNavigate }: { isOpen: boolean; onNavigate?: () => void }) {

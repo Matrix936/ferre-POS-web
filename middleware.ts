@@ -33,7 +33,7 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
 
-  const protectedPaths = ["/dashboard", "/rentabilidad", "/financiero", "/caja"];
+  const protectedPaths = ["/dashboard", "/rentabilidad", "/financiero", "/caja", "/ventas"];
 
   if (!user && protectedPaths.some((p) => path === p || path.startsWith(`${p}/`))) {
     const url = request.nextUrl.clone();

@@ -1,5 +1,6 @@
 import { Box, Typography } from "@mui/material";
 import { dashboardScope } from "@/lib/dashboard-scope";
+import { periodoAnterior } from "@/lib/format";
 import { fila, type FinancieroResumen, type VentaPorMetodo, type AgingRow, type CxPAgingRow } from "@/lib/dashboard-types";
 import DateRangePicker from "@/components/date-range-picker";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
@@ -13,15 +14,20 @@ export default async function FinancieroPage({ searchParams }: Props) {
   const { supabase, user, rango, desde, hasta, esDueño, p_sucursal_id } = await dashboardScope(searchParams);
 
   const iso = { p_desde: desde, p_hasta: hasta };
+  const prev = periodoAnterior(desde, hasta);
+  const prevIso = { p_desde: prev.desde, p_hasta: prev.hasta };
 
-  const [{ data: dResumen }, { data: dMetodo }, { data: dCxC }, { data: dCxP }] = await Promise.all([
+  const [{ data: dResumen }, { data: dMetodo }, { data: dCxC }, { data: dCxP }, resumenPrevResult] = await Promise.all([
     supabase.rpc("financiero_resumen", { ...iso, p_sucursal_id }),
     supabase.rpc("ventas_por_metodo", { ...iso, p_sucursal_id }),
     supabase.rpc("cuentas_por_cobrar_aging", { p_sucursal_id }),
     supabase.rpc("cuentas_por_pagar_aging", { p_sucursal_id }),
+    prev.desde ? supabase.rpc("financiero_resumen", { ...prevIso, p_sucursal_id }) : Promise.resolve(null),
   ]);
+  const dResumenPrev = resumenPrevResult?.data ?? null;
 
   const resumen = fila<FinancieroResumen>(dResumen) ?? ({} as FinancieroResumen);
+  const resumenPrev = fila<FinancieroResumen>(dResumenPrev);
   const metodo = (Array.isArray(dMetodo) ? dMetodo : []) as VentaPorMetodo[];
   const cxc = (Array.isArray(dCxC) ? dCxC : []) as AgingRow[];
   const cxp = (Array.isArray(dCxP) ? dCxP : []) as CxPAgingRow[];
@@ -42,7 +48,7 @@ export default async function FinancieroPage({ searchParams }: Props) {
           <DateRangePicker rango={rango} />
         </Box>
 
-        <FinancieroTabs resumen={resumen} metodo={metodo} edadCxC={cxc} edadCxP={cxp} />
+        <FinancieroTabs resumen={resumen} resumenPrev={resumenPrev} metodo={metodo} edadCxC={cxc} edadCxP={cxp} prevDisponible={Boolean(prev.desde)} />
       </Box>
     </DashboardLayout>
   );

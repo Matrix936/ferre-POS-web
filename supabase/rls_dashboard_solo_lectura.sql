@@ -884,6 +884,212 @@ as $$
     limit greatest(p_limite, 0);
 $$;
 
+-- 4.12 Historial de ventas paginado (ventas + apartados).
+--      Réplica de get_historial_ventas_page_blocking del escritorio. Devuelve
+--      la página solicitada y, en cada fila, el total de registros del filtro
+--      (count(*) over) para paginar sin llamadas adicionales. Se une a la vista
+--      dash_v_usuarios (los write usernames no se exponen vía REST).
+create or replace function public.ventas_historial_page(
+    p_desde       timestamptz default null,
+    p_hasta       timestamptz default null,
+    p_sucursal_id text        default null,
+    p_usuario_id  text        default null,
+    p_folio       text        default null,
+    p_estado      text        default null,
+    p_pagina      integer     default 1,
+    p_por_pagina  integer     default 10
+)
+returns table (
+    id                         text,
+    folio                      text,
+    fecha                      timestamptz,
+    total_centavos             bigint,
+    metodo_pago                text,
+    efectivo_recibido_centavos bigint,
+    cambio_entregado_centavos  bigint,
+    estado                     text,
+    tipo_origen                text,
+    fecha_vencimiento          timestamptz,
+    anticipo_total_centavos    bigint,
+    saldo_pendiente_centavos   bigint,
+    sucursal_id                text,
+    sucursal_nombre            text,
+    usuario_id                 text,
+    usuario_nombre             text,
+    cliente_id                 text,
+    cliente_nombre             text,
+    total                      bigint
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+    select
+        hv.id,
+        hv.folio,
+        hv.fecha,
+        hv.total_centavos,
+        hv.metodo_pago,
+        hv.efectivo_recibido_centavos,
+        hv.cambio_entregado_centavos,
+        hv.estado,
+        hv.tipo_origen,
+        hv.fecha_vencimiento,
+        hv.anticipo_total_centavos,
+        hv.saldo_pendiente_centavos,
+        hv.sucursal_id,
+        hv.sucursal_nombre,
+        hv.usuario_id,
+        hv.usuario_nombre,
+        hv.cliente_id,
+        hv.cliente_nombre,
+        count(*) over () as total
+    from (
+        select
+            v.id as id,
+            '' as folio,
+            v.fecha as fecha,
+            v.total_centavos as total_centavos,
+            v.metodo_pago as metodo_pago,
+            v.efectivo_recibido_centavos as efectivo_recibido_centavos,
+            v.cambio_entregado_centavos  as cambio_entregado_centavos,
+            v.estado as estado,
+            coalesce(nullif(v.tipo_origen, ''), 'VENTA') as tipo_origen,
+            null::timestamptz as fecha_vencimiento,
+            0::bigint as anticipo_total_centavos,
+            0::bigint as saldo_pendiente_centavos,
+            s.id as sucursal_id,
+            s.nombre as sucursal_nombre,
+            u.id as usuario_id,
+            u.nombre as usuario_nombre,
+            c.id as cliente_id,
+            coalesce(c.nombre, v.cliente_rapido_nombre, '') as cliente_nombre
+        from public.ventas v
+        inner join public.sucursales s              on s.id = v.sucursal_id
+        inner join public.dash_v_usuarios u         on u.id = v.usuario_id
+        left join public.clientes c                 on c.id = v.cliente_id
+        where coalesce(nullif(v.tipo_origen, ''), 'VENTA') <> 'APARTADO'
+        union all
+        select
+            a.id as id,
+            a.folio as folio,
+            a.fecha as fecha,
+            a.total_centavos as total_centavos,
+            'APARTADO' as metodo_pago,
+            null::bigint as efectivo_recibido_centavos,
+            null::bigint as cambio_entregado_centavos,
+            a.estado as estado,
+            'APARTADO' as tipo_origen,
+            a.fecha_vencimiento as fecha_vencimiento,
+            a.anticipo_total_centavos as anticipo_total_centavos,
+            a.saldo_pendiente_centavos as saldo_pendiente_centavos,
+            s.id as sucursal_id,
+            s.nombre as sucursal_nombre,
+            u.id as usuario_id,
+            u.nombre as usuario_nombre,
+            c.id as cliente_id,
+            coalesce(c.nombre, a.nombre_referencia, '') as cliente_nombre
+        from public.apartados a
+        inner join public.sucursales s              on s.id = a.sucursal_id
+        inner join public.dash_v_usuarios u         on u.id = a.usuario_id
+        left join public.clientes c                 on c.id = a.cliente_id
+        where coalesce(a.eliminado, false) = false
+    ) hv
+    where (p_desde is null or hv.fecha >= p_desde)
+      and (p_hasta is null or hv.fecha <= p_hasta)
+      and (p_sucursal_id is null or hv.sucursal_id = p_sucursal_id)
+      and (p_usuario_id is null or hv.usuario_id = p_usuario_id)
+      and (p_estado is null or hv.estado = upper(p_estado))
+      and (
+          p_folio is null
+          or hv.id ilike '%' || p_folio || '%'
+          or hv.folio ilike '%' || p_folio || '%'
+      )
+    order by hv.fecha desc
+    limit greatest(p_por_pagina, 1)
+    offset greatest(p_pagina - 1, 0) * greatest(p_por_pagina, 1);
+$$;
+
+-- 4.13 Detalle de un documento de venta (venta o apartado), sin paginar.
+--      Réplica de get_detalle_venta_blocking del escritorio: intenta `ventas`
+--      (con cantidad devuelta desde devoluciones REGISTRADAS) y, si el id no
+--      existe ahí, busca en `detalle_apartados`.
+create or replace function public.venta_detalle(
+    p_venta_id text
+)
+returns table (
+    id                               text,
+    venta_id                         text,
+    producto_id                      text,
+    descripcion                      text,
+    marca                            text,
+    unidad                           text,
+    cantidad                         numeric,
+    precio_venta_pactado_centavos    bigint,
+    descuento_aplicado_centavos      bigint,
+    costo_unitario_pactado_centavos  bigint,
+    cantidad_devuelta                numeric
+)
+language plpgsql
+stable
+security invoker
+set search_path = public
+as $$
+begin
+    if exists (
+        select 1 from public.ventas v where v.id = p_venta_id
+    ) then
+        return query
+        select
+            dv.id,
+            dv.venta_id,
+            dv.producto_id,
+            coalesce(nullif(dv.producto_descripcion, ''), p.descripcion),
+            coalesce(m.nombre, ''),
+            coalesce(nullif(dv.unidad_venta, ''), nullif(p.unidad_venta, ''), u.nombre, ''),
+            dv.cantidad,
+            dv.precio_venta_pactado_centavos,
+            dv.descuento_aplicado_centavos,
+            dv.costo_unitario_pactado_centavos,
+            coalesce((
+                select sum(dd.cantidad)
+                from public.detalle_devoluciones dd
+                inner join public.devoluciones d on d.id = dd.devolucion_id
+                where dd.detalle_venta_id = dv.id
+                  and d.estado = 'REGISTRADA'
+                  and coalesce(dd.eliminado, false) = false
+            ), 0) as cantidad_devuelta
+        from public.detalle_ventas dv
+        inner join public.productos p on p.id = dv.producto_id
+        left join public.marcas m     on m.id = p.marca_id
+        left join public.unidades u   on u.id = p.unidad_id
+        where dv.venta_id = p_venta_id;
+        return;
+    end if;
+
+    return query
+    select
+        da.id,
+        da.apartado_id,
+        da.producto_id,
+        coalesce(p.descripcion, ''),
+        coalesce(m.nombre, ''),
+        coalesce(nullif(p.unidad_venta, ''), u.nombre, ''),
+        da.cantidad,
+        da.precio_venta_pactado_centavos,
+        0::bigint,
+        da.costo_unitario_pactado_centavos,
+        0::numeric
+    from public.detalle_apartados da
+    inner join public.productos p on p.id = da.producto_id
+    left join public.marcas m     on m.id = p.marca_id
+    left join public.unidades u   on u.id = p.unidad_id
+    where da.apartado_id = p_venta_id
+      and coalesce(da.eliminado, false) = false
+    order by p.descripcion;
+end $$;
+
 -- ----------------------------------------------------------------------------
 -- 5) Conceder a `authenticated` la ejecución de las funciones read-only.
 --    (Después del revoke global del paso 1.)
@@ -901,6 +1107,8 @@ grant execute on function public.financiero_resumen(timestamptz, timestamptz, te
 grant execute on function public.cuentas_por_cobrar_aging(text) to authenticated;
 grant execute on function public.cuentas_por_pagar_aging(text) to authenticated;
 grant execute on function public.turnos_resumen(timestamptz, timestamptz, text, integer) to authenticated;
+grant execute on function public.ventas_historial_page(timestamptz, timestamptz, text, text, text, text, integer, integer) to authenticated;
+grant execute on function public.venta_detalle(text) to authenticated;
 
 -- ----------------------------------------------------------------------------
 -- 6) Verificación (opcional)

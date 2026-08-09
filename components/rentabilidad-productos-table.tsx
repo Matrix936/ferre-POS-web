@@ -1,24 +1,39 @@
 "use client";
 
-import { useState } from "react";
-import { Box, Chip, TableBody, TableCell, TableRow, Typography } from "@mui/material";
-import { TrendingUpOutlined } from "@mui/icons-material";
+import { useMemo, useState } from "react";
+import { Box, Chip, InputAdornment, TableBody, TableCell, TableRow, TextField, Typography } from "@mui/material";
+import { Search, TrendingUpOutlined } from "@mui/icons-material";
 import { cantidad, dineroCentavos } from "@/lib/format";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import type { ProductoRentabilidad } from "@/lib/dashboard-types";
 import { BusinessTable, RowNumberCell } from "@/components/business-table";
 import { TablePager } from "@/components/table-pager";
 import { AvatarProducto } from "@/components/avatar-producto";
 import { EmptyState } from "@/components/empty-state";
+import ExportCsvButton from "@/components/export-csv-button";
 
 export default function RentabilidadProductosTable({ data }: { data: ProductoRentabilidad[] }) {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 250);
 
-  const totalRows = data.length;
+  const filtered = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    if (!q) return data;
+    return data.filter(
+      (p) =>
+        p.descripcion.toLowerCase().includes(q) ||
+        (p.codigo_proveedor ?? "").toLowerCase().includes(q) ||
+        (p.marca ?? "").toLowerCase().includes(q),
+    );
+  }, [data, debouncedSearch]);
+
+  const totalRows = filtered.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const fromRow = totalRows === 0 ? 0 : page * pageSize + 1;
   const toRow = Math.min((page + 1) * pageSize, totalRows);
-  const rows = data.slice(page * pageSize, page * pageSize + pageSize);
+  const rows = filtered.slice(page * pageSize, page * pageSize + pageSize);
 
   const setPageSizeAndReset = (value: number) => {
     setPageSize(value);
@@ -27,13 +42,49 @@ export default function RentabilidadProductosTable({ data }: { data: ProductoRen
 
   return (
     <Box sx={{ borderRadius: 2, border: "1px solid", borderColor: "divider", overflow: "hidden", bgcolor: "background.paper" }}>
-      <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-          Rentabilidad por producto
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Top por utilidad generada en el periodo.
-        </Typography>
+      <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
+        <Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+            Rentabilidad por producto
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Top por utilidad generada en el periodo.
+          </Typography>
+        </Box>
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
+          <TextField
+            size="small"
+            placeholder="Buscar producto..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0);
+            }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search fontSize="small" />
+                  </InputAdornment>
+                ),
+              },
+            }}
+            sx={{ minWidth: 220 }}
+          />
+          <ExportCsvButton
+            filename="rentabilidad-productos"
+            rows={filtered.map((p) => ({
+              Producto: p.descripcion,
+              Codigo: p.codigo_proveedor,
+              Marca: p.marca,
+              Unidades: p.unidades_vendidas,
+              Venta: p.venta_centavos,
+              Costo: p.costo_centavos,
+              Utilidad: p.utilidad_centavos,
+              "Margen %": p.margen_porcentaje,
+            }))}
+          />
+        </Box>
       </Box>
 
       <BusinessTable

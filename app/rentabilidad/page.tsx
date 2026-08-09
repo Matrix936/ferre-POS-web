@@ -1,6 +1,6 @@
 import { Box, Typography } from "@mui/material";
 import { dashboardScope } from "@/lib/dashboard-scope";
-import { dineroCentavos } from "@/lib/format";
+import { deltaPorcentaje, dineroCentavos, periodoAnterior } from "@/lib/format";
 import { fila, type RentabilidadResumen, type ProductoRentabilidad } from "@/lib/dashboard-types";
 import DateRangePicker from "@/components/date-range-picker";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
@@ -16,19 +16,28 @@ export default async function RentabilidadPage({ searchParams }: Props) {
   const { supabase, user, rango, desde, hasta, esDueño, p_sucursal_id } = await dashboardScope(searchParams);
 
   const iso = { p_desde: desde, p_hasta: hasta };
+  const prev = periodoAnterior(desde, hasta);
+  const prevIso = { p_desde: prev.desde, p_hasta: prev.hasta };
 
-  const [{ data: dResumen }, { data: dProductos }] = await Promise.all([
+  const [{ data: dResumen }, resumenPrevResult, { data: dProductos }] = await Promise.all([
     supabase.rpc("rentabilidad_resumen", { ...iso, p_sucursal_id }),
+    prev.desde ? supabase.rpc("rentabilidad_resumen", { ...prevIso, p_sucursal_id }) : Promise.resolve(null),
     supabase.rpc("rentabilidad_productos", { ...iso, p_sucursal_id, p_limite: 50 }),
   ]);
+  const dResumenPrev = resumenPrevResult?.data ?? null;
 
   const resumen = fila<RentabilidadResumen>(dResumen);
+  const resumenPrev = fila<RentabilidadResumen>(dResumenPrev);
   const productos = (Array.isArray(dProductos) ? dProductos : []) as ProductoRentabilidad[];
 
   const ventaTotal = Number(resumen?.venta_total_centavos ?? 0);
   const costoTotal = Number(resumen?.costo_total_centavos ?? 0);
   const utilidad = Number(resumen?.utilidad_centavos ?? 0);
   const margen = Number(resumen?.margen_porcentaje ?? 0);
+
+  const hasPrev = prev.desde !== null && resumenPrev;
+  const delta = (field: keyof RentabilidadResumen) =>
+    hasPrev ? deltaPorcentaje(Number(resumen?.[field] ?? 0), Number(resumenPrev?.[field] ?? 0)) : null;
 
   const topData = productos.slice(0, 10).map((p) => ({
     label: p.descripcion,
@@ -52,10 +61,10 @@ export default async function RentabilidadPage({ searchParams }: Props) {
         </Box>
 
         <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", xl: "repeat(4, 1fr)" }, mb: 2 }}>
-          <ExecutiveCard label="Venta total" value={dineroCentavos(ventaTotal)} helper="Ingresos del periodo" />
-          <ExecutiveCard label="Costo de venta" value={dineroCentavos(costoTotal)} helper="Costo pactado de mercancía" />
-          <ExecutiveCard label="Utilidad neta" value={dineroCentavos(utilidad)} helper="Venta − costo" />
-          <ExecutiveCard label="Margen bruto" value={`${margen.toLocaleString("es-MX", { maximumFractionDigits: 1 })}%`} helper="Utilidad sobre venta" />
+          <ExecutiveCard label="Venta total" value={dineroCentavos(ventaTotal)} helper="Ingresos del periodo" delta={delta("venta_total_centavos")} />
+          <ExecutiveCard label="Costo de venta" value={dineroCentavos(costoTotal)} helper="Costo pactado de mercancía" delta={delta("costo_total_centavos")} />
+          <ExecutiveCard label="Utilidad neta" value={dineroCentavos(utilidad)} helper="Venta − costo" delta={delta("utilidad_centavos")} />
+          <ExecutiveCard label="Margen bruto" value={`${margen.toLocaleString("es-MX", { maximumFractionDigits: 1 })}%`} helper="Utilidad sobre venta" delta={delta("margen_porcentaje")} />
         </Box>
 
         <Box sx={{ mb: 2 }}>

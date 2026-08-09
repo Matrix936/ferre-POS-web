@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { Box, Chip, Tab, TableBody, TableCell, TableRow, Tabs, Typography } from "@mui/material";
 import { AccountBalanceWalletOutlined, ReceiptLongOutlined } from "@mui/icons-material";
-import { dineroCentavos } from "@/lib/format";
+import { deltaPorcentaje, dineroCentavos } from "@/lib/format";
 import type { FinancieroResumen, VentaPorMetodo, AgingRow, CxPAgingRow } from "@/lib/dashboard-types";
 import { BusinessTable, RowNumberCell } from "@/components/business-table";
 import { TablePager } from "@/components/table-pager";
 import { ExecutiveCard } from "@/components/executive-card";
-import { SimpleDonutChart } from "@/components/simple-charts";
+import { SimpleBarChart, SimpleDonutChart } from "@/components/simple-charts";
 import { EmptyState } from "@/components/empty-state";
+import ExportCsvButton from "@/components/export-csv-button";
 
 function usePager(total: number, initialSize = 10) {
   const [page, setPage] = useState(0);
@@ -35,14 +36,18 @@ function usePager(total: number, initialSize = 10) {
 
 export default function FinancieroTabs({
   resumen,
+  resumenPrev,
   metodo,
   edadCxC,
   edadCxP,
+  prevDisponible = false,
 }: {
   resumen: FinancieroResumen;
+  resumenPrev?: FinancieroResumen | null;
   metodo: VentaPorMetodo[];
   edadCxC: AgingRow[];
   edadCxP: CxPAgingRow[];
+  prevDisponible?: boolean;
 }) {
   const [tab, setTab] = useState(0);
 
@@ -50,6 +55,18 @@ export default function FinancieroTabs({
     label: (m.metodo_pago?.[0]?.toUpperCase() ?? "") + (m.metodo_pago?.slice(1) ?? ""),
     value: Number(m.total_centavos ?? 0),
   }));
+
+  const flujoData = [
+    { label: "Ingresos caja", value: Number(resumen.ingresos_caja_centavos ?? 0), color: "#2E7D32" },
+    { label: "Egresos caja", value: Number(resumen.egresos_caja_centavos ?? 0), color: "#D32F2F" },
+    { label: "Compras", value: Number(resumen.compras_centavos ?? 0), color: "#ED6C02" },
+    { label: "CxC", value: Number(resumen.cuentas_por_cobrar_centavos ?? 0), color: "#9C27B0" },
+    { label: "CxP", value: Number(resumen.cuentas_por_pagar_centavos ?? 0), color: "#6D4C41" },
+  ];
+
+  // Deltas % vs periodo anterior (null cuando no hay base → la card no muestra).
+  const delta = (field: keyof FinancieroResumen) =>
+    prevDisponible && resumenPrev ? deltaPorcentaje(Number(resumen[field] ?? 0), Number(resumenPrev[field] ?? 0)) : null;
 
   return (
     <>
@@ -65,29 +82,43 @@ export default function FinancieroTabs({
         <Tab label="Cuentas por pagar" />
       </Tabs>
 
-      {tab === 0 && <ResumenTab resumen={resumen} donutData={donutData} />}
+      {tab === 0 && <ResumenTab resumen={resumen} donutData={donutData} flujoData={flujoData} delta={delta} />}
       {tab === 1 && <AgingCxCTab data={edadCxC} />}
       {tab === 2 && <AgingCxPTab data={edadCxP} />}
     </>
   );
 }
 
-function ResumenTab({ resumen, donutData }: { resumen: FinancieroResumen; donutData: { label: string; value: number }[] }) {
+function ResumenTab({
+  resumen,
+  donutData,
+  flujoData,
+  delta,
+}: {
+  resumen: FinancieroResumen;
+  donutData: { label: string; value: number }[];
+  flujoData: { label: string; value: number; color: string }[];
+  delta: (field: keyof FinancieroResumen) => number | null;
+}) {
   return (
     <>
       <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", xl: "repeat(4, 1fr)" }, mb: 2 }}>
-        <ExecutiveCard label="Ingresos caja" value={dineroCentavos(resumen.ingresos_caja_centavos)} helper="Movimientos de ingreso" />
-        <ExecutiveCard label="Egresos caja" value={dineroCentavos(resumen.egresos_caja_centavos)} helper="Movimientos de salida" />
-        <ExecutiveCard label="Compras (pago a proveedores)" value={dineroCentavos(resumen.compras_centavos)} helper="Incluye cotizaciones excluidas" />
-        <ExecutiveCard label="Flujo neto estimado" value={dineroCentavos(resumen.flujo_neto_estimado_centavos)} helper="Efectivo + tarjeta + transferencia ± caja − compras" />
-        <ExecutiveCard label="Cuentas por cobrar" value={dineroCentavos(resumen.cuentas_por_cobrar_centavos)} helper="Saldo deudor de clientes" />
-        <ExecutiveCard label="Cuentas por pagar" value={dineroCentavos(resumen.cuentas_por_pagar_centavos)} helper="Compras pendientes" />
-        <ExecutiveCard label="Ventas crédito" value={dineroCentavos(resumen.ventas_credito_centavos)} helper="Crédito otorgado en el periodo" />
+        <ExecutiveCard label="Ingresos caja" value={dineroCentavos(resumen.ingresos_caja_centavos)} helper="Movimientos de ingreso" delta={delta("ingresos_caja_centavos")} />
+        <ExecutiveCard label="Egresos caja" value={dineroCentavos(resumen.egresos_caja_centavos)} helper="Movimientos de salida" delta={delta("egresos_caja_centavos")} />
+        <ExecutiveCard label="Compras (pago a proveedores)" value={dineroCentavos(resumen.compras_centavos)} helper="Incluye cotizaciones excluidas" delta={delta("compras_centavos")} />
+        <ExecutiveCard label="Flujo neto estimado" value={dineroCentavos(resumen.flujo_neto_estimado_centavos)} helper="Efectivo + tarjeta + transferencia ± caja − compras" delta={delta("flujo_neto_estimado_centavos")} />
+        <ExecutiveCard label="Cuentas por cobrar" value={dineroCentavos(resumen.cuentas_por_cobrar_centavos)} helper="Saldo deudor de clientes" delta={delta("cuentas_por_cobrar_centavos")} />
+        <ExecutiveCard label="Cuentas por pagar" value={dineroCentavos(resumen.cuentas_por_pagar_centavos)} helper="Compras pendientes" delta={delta("cuentas_por_pagar_centavos")} />
+        <ExecutiveCard label="Ventas crédito" value={dineroCentavos(resumen.ventas_credito_centavos)} helper="Crédito otorgado en el periodo" delta={delta("ventas_credito_centavos")} />
       </Box>
 
       <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, mb: 2 }}>
         <SimpleDonutChart title="Ventas por forma de pago" subtitle="Composición del periodo" data={donutData} format="currency" />
         <ResumenMetodoGrid resumen={resumen} />
+      </Box>
+
+      <Box sx={{ mb: 2 }}>
+        <SimpleBarChart title="Flujo operativo" subtitle="Entradas, salidas y obligaciones" data={flujoData} format="currency" />
       </Box>
     </>
   );
@@ -122,13 +153,28 @@ function AgingCxCTab({ data }: { data: AgingRow[] }) {
 
   return (
     <Box sx={{ borderRadius: 2, border: "1px solid", borderColor: "divider", overflow: "hidden", bgcolor: "background.paper" }}>
-      <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-          Cuentas por cobrar — antigüedad
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Saldo por cliente según días de atraso.
-        </Typography>
+      <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
+        <Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+            Cuentas por cobrar — antigüedad
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Saldo por cliente según días de atraso.
+          </Typography>
+        </Box>
+        <ExportCsvButton
+          filename="cuentas-por-cobrar"
+          rows={data.map((c) => ({
+            Cliente: c.cliente_nombre,
+            Vigente: c.deuda_vigente_centavos,
+            "1-30": c.deuda_1_30_centavos,
+            "31-60": c.deuda_31_60_centavos,
+            "60+": c.deuda_60_mas_centavos,
+            Total: c.total_deuda_centavos,
+            "Limite credito": c.limite_credito_centavos,
+            "Uso credito %": c.uso_credito_porcentaje,
+          }))}
+        />
       </Box>
       <BusinessTable
         headers={[
@@ -213,13 +259,27 @@ function AgingCxPTab({ data }: { data: CxPAgingRow[] }) {
 
   return (
     <Box sx={{ borderRadius: 2, border: "1px solid", borderColor: "divider", overflow: "hidden", bgcolor: "background.paper" }}>
-      <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-          Cuentas por pagar — antigüedad
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Compras pendientes por proveedor según vencimiento.
-        </Typography>
+      <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
+        <Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+            Cuentas por pagar — antigüedad
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Compras pendientes por proveedor según vencimiento.
+          </Typography>
+        </Box>
+        <ExportCsvButton
+          filename="cuentas-por-pagar"
+          rows={data.map((p) => ({
+            Proveedor: p.proveedor_nombre,
+            Vigente: p.deuda_vigente_centavos,
+            "1-30": p.deuda_1_30_centavos,
+            "31-60": p.deuda_31_60_centavos,
+            "60+": p.deuda_60_mas_centavos,
+            Total: p.total_deuda_centavos,
+            "Compras pend.": p.compras_pendientes,
+          }))}
+        />
       </Box>
       <BusinessTable
         headers={[

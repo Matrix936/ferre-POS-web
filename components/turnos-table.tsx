@@ -8,6 +8,7 @@ import type { TurnoResumen } from "@/lib/dashboard-types";
 import { BusinessTable, RowNumberCell } from "@/components/business-table";
 import { TablePager } from "@/components/table-pager";
 import { EmptyState } from "@/components/empty-state";
+import ExportCsvButton from "@/components/export-csv-button";
 
 const estadoColor: Record<string, "success" | "warning" | "error" | "info"> = {
   ABIERTA: "success",
@@ -45,13 +46,32 @@ export default function TurnosTable({ data }: { data: TurnoResumen[] }) {
 
   return (
     <Box sx={{ borderRadius: 2, border: "1px solid", borderColor: "divider", overflow: "hidden", bgcolor: "background.paper" }}>
-      <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-          Cortes de caja / turnos
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Sesiones de caja recientes con arqueo y diferencia.
-        </Typography>
+      <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
+        <Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+            Cortes de caja / turnos
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Sesiones de caja recientes con arqueo y diferencia.
+          </Typography>
+        </Box>
+        <ExportCsvButton
+          filename="turnos"
+          rows={data.map((t) => ({
+            Usuario: t.usuario_nombre,
+            Sucursal: t.sucursal_nombre,
+            Apertura: t.fecha_apertura,
+            Cierre: t.fecha_cierre,
+            Inicial: t.monto_inicial_centavos,
+            "Ventas efectivo": t.ventas_efectivo_centavos,
+            Ingresos: t.ingresos_centavos,
+            Egresos: t.egresos_centavos,
+            Esperado: t.monto_esperado_centavos,
+            Real: t.monto_final_real_centavos,
+            Diferencia: t.diferencia_centavos,
+            Estado: t.estado,
+          }))}
+        />
       </Box>
 
       <BusinessTable

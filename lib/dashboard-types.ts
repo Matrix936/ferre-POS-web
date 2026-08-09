@@ -130,6 +130,42 @@ export type TurnoResumen = {
   estado: string;
 };
 
+export type HistorialVentaRow = {
+  id: string;
+  folio: string;
+  fecha: string;
+  total_centavos: number;
+  metodo_pago: string;
+  efectivo_recibido_centavos: number | null;
+  cambio_entregado_centavos: number | null;
+  estado: string;
+  tipo_origen: string;
+  fecha_vencimiento: string | null;
+  anticipo_total_centavos: number;
+  saldo_pendiente_centavos: number;
+  sucursal_id: string;
+  sucursal_nombre: string;
+  usuario_id: string;
+  usuario_nombre: string;
+  cliente_id: string | null;
+  cliente_nombre: string;
+  total: number;
+};
+
+export type HistorialVentaDetalle = {
+  id: string;
+  venta_id: string;
+  producto_id: string;
+  descripcion: string;
+  marca: string;
+  unidad: string;
+  cantidad: number;
+  precio_venta_pactado_centavos: number;
+  descuento_aplicado_centavos: number;
+  costo_unitario_pactado_centavos: number;
+  cantidad_devuelta: number;
+};
+
 // Convierte el array de una `returns table(...)` a su fila única (o null).
 export function fila<T>(data: T[] | T | null): T | null {
   if (Array.isArray(data)) return data.length ? data[0] : null;
