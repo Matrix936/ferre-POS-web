@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
+  Alert,
   AppBar,
   Avatar,
   Box,
@@ -10,12 +12,14 @@ import {
   IconButton,
   Menu,
   MenuItem,
+  Snackbar,
   Toolbar,
   Tooltip,
   Typography,
 } from "@mui/material";
 import { Logout as LogoutIcon, Menu as MenuIcon } from "@mui/icons-material";
 import ThemeToggle from "@/components/theme-toggle";
+import { useNavigationOverlay } from "@/components/navigation-overlay";
 
 // Port de la Topbar del escritorio (ferre-pos/src/layout/components/Topbar.tsx)
 // solo en su parte de UI: fecha/hora es-MX, toggle de tema, avatar y menú de
@@ -53,6 +57,9 @@ export function Topbar({
 }) {
   const [currentDateTime, setCurrentDateTime] = useState(() => formatCurrentDateTime(new Date()));
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const router = useRouter();
+  const { show: showOverlay, hide: hideOverlay } = useNavigationOverlay();
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -63,6 +70,26 @@ export function Topbar({
 
   const nombre = user?.nombre?.trim() || user?.email?.split("@")[0] || "Usuario";
   const rol = user?.rol;
+
+  async function handleLogout() {
+    setAnchorEl(null);
+    setLogoutError(null);
+    showOverlay("Cerrando sesión...");
+    try {
+      const res = await fetch("/auth/signout", { method: "POST" });
+      if (res.ok || res.redirected) {
+        router.replace("/login");
+        return;
+      }
+      throw new Error(`Código ${res.status}`);
+    } catch (err) {
+      console.error("Cerrar sesión: fallo de red o del servidor", err);
+      // No navegar: la sesión sigue viva y /login redirigiría de vuelta al
+      // dashboard (bucle). Se avisa al usuario y se levanta el overlay.
+      hideOverlay();
+      setLogoutError("No se pudo cerrar sesión. Inténtalo de nuevo.");
+    }
+  }
 
   return (
     <AppBar
@@ -129,21 +156,34 @@ export function Topbar({
           ) : null}
         </Box>
         <Divider />
-        <form action="/auth/signout" method="post">
-          <MenuItem
-            component="button"
-            type="submit"
-            sx={{
-              width: "100%",
-              color: "error.main",
-              "& .MuiSvgIcon-root": { color: "error.main" },
-            }}
-          >
-            <LogoutIcon fontSize="small" sx={{ mr: 1.5 }} />
-            Cerrar Sesión
-          </MenuItem>
-        </form>
+        <MenuItem
+          onClick={handleLogout}
+          sx={{
+            width: "100%",
+            color: "error.main",
+            "& .MuiSvgIcon-root": { color: "error.main" },
+          }}
+        >
+          <LogoutIcon fontSize="small" sx={{ mr: 1.5 }} />
+          Cerrar Sesión
+        </MenuItem>
       </Menu>
+
+      <Snackbar
+        open={Boolean(logoutError)}
+        autoHideDuration={6000}
+        onClose={() => setLogoutError(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          role="alert"
+          severity="error"
+          variant="standard"
+          onClose={() => setLogoutError(null)}
+        >
+          {logoutError}
+        </Alert>
+      </Snackbar>
     </AppBar>
   );
 }

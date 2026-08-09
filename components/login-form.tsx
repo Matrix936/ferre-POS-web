@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Alert, Autocomplete, Box, Snackbar, TextField } from "@mui/material";
 import { createClient } from "@/lib/supabase/client";
 import AsyncButton from "@/components/async-button";
+import { useNavigationOverlay } from "@/components/navigation-overlay";
 
 // Historial de correos usados en el login (solo web, sin endpoints).
 // Mismo espíritu del escritorio (ferre-pos:last-login-user), pero con lista
@@ -34,6 +35,7 @@ function readSavedEmails(): string[] {
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { show: showOverlay } = useNavigationOverlay();
   const [savedEmails] = useState(readSavedEmails);
   const [email, setEmail] = useState(() => readSavedEmails()[0] ?? "");
   const [password, setPassword] = useState("");
@@ -68,7 +70,6 @@ export default function LoginForm() {
 
     const next = searchParams.get("next");
     router.replace(next && next.startsWith("/") ? next : "/dashboard");
-    router.refresh();
   }
 
   async function doSubmit() {
@@ -87,6 +88,10 @@ export default function LoginForm() {
       return;
     }
 
+    // El overlay mantiene el feedback visible durante la navegación al
+    // dashboard (el router.replace del App Router no es awaitable, no hay
+    // "después de navegar" para soltar el loading del botón).
+    showOverlay("Cargando panel...");
     saveEmailAndNavigate();
   }
 

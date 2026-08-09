@@ -4,6 +4,7 @@ import "@fontsource/roboto/400.css";
 import "@fontsource/roboto/500.css";
 import "@fontsource/roboto/700.css";
 import AppThemeProvider from "@/components/theme-provider";
+import { NavigationOverlayProvider } from "@/components/navigation-overlay";
 import "./theme.css";
 
 export const metadata: Metadata = {
@@ -17,7 +18,9 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body>
-        <AppThemeProvider>{children}</AppThemeProvider>
+        <AppThemeProvider>
+          <NavigationOverlayProvider>{children}</NavigationOverlayProvider>
+        </AppThemeProvider>
       </body>
     </html>
   );
