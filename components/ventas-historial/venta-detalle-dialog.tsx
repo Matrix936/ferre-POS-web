@@ -1,7 +1,7 @@
 "use client";
 
-import { Box, CircularProgress, Drawer, TableBody, TableCell, TableRow, Typography, useMediaQuery, useTheme } from "@mui/material";
-import { ReceiptLongOutlined } from "@mui/icons-material";
+import { Box, CircularProgress, Drawer, IconButton, TableBody, TableCell, TableRow, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { Close as CloseIcon, ReceiptLongOutlined } from "@mui/icons-material";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { dineroCentavos } from "@/lib/format";
@@ -66,13 +66,18 @@ export default function VentaDetalleDialog({
       }}
     >
       <Box sx={{ p: 3, overflowY: "auto", height: "100%" }}>
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="h5" sx={{ fontWeight: 900 }}>
-            {esApartado ? "Detalle de Apartado" : "Detalle de Venta"}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ wordBreak: "break-all" }}>
-            {venta?.folio || (venta?.id ?? "").slice(0, 8)}
-          </Typography>
+        <Box sx={{ mb: 2, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 1 }}>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 900 }}>
+              {esApartado ? "Detalle de Apartado" : "Detalle de Venta"}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ wordBreak: "break-all" }}>
+              {venta?.folio || (venta?.id ?? "").slice(0, 8)}
+            </Typography>
+          </Box>
+          <IconButton onClick={onClose} aria-label="Cerrar detalle" edge="end" sx={{ mt: -0.5, mr: -1 }}>
+            <CloseIcon />
+          </IconButton>
         </Box>
 
         {error && <Typography variant="body2" color="error" sx={{ mb: 2 }}>{error}</Typography>}
