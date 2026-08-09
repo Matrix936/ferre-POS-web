@@ -110,7 +110,7 @@ export function Topbar({
         </Box>
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-          <Box sx={{ display: { xs: "none", sm: "flex" }, flexDirection: "column", alignItems: "flex-end" }}>
+          <Box sx={{ display: { xs: "none", sm: "flex" }, flexDirection: "column", alignItems: "center" }}>
             <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.1 }}>
               {currentDateTime.split(" - ")[0]}
             </Typography>
