@@ -1,0 +1,79 @@
+:root {
+  --color-primary: #1a73e8;
+  --color-primary-light: #e8f0fe;
+  --color-primary-hover: #1557b0;
+  --color-error: #d32f2f;
+  --color-error-dark: #c62828;
+
+  --bg-page: #f8f9fa;
+  --bg-paper: #ffffff;
+  --divider: #e5e7eb;
+  --border-input: #d1d5db;
+
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-disabled: #9ca3af;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #1a73e8;
+    --color-primary-light: rgba(25, 118, 210, 0.16);
+    --color-primary-hover: #4285f4;
+    --color-error: #ef5350;
+    --color-error-dark: #f2b8b5;
+
+    --bg-page: #121212;
+    --bg-paper: #1e1e1e;
+    --divider: rgba(255, 255, 255, 0.12);
+    --border-input: rgba(255, 255, 255, 0.23);
+
+    --text-primary: #f1f3f4;
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --text-disabled: rgba(255, 255, 255, 0.38);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+/* Spinner de AsyncButton (equiv. CircularProgress 16px) */
+@keyframes fsp-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.fsp-spinner {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: fsp-spin 0.7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fsp-spinner {
+    animation: none;
+    transform: none;
+  }
+}
