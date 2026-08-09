@@ -8,8 +8,9 @@ export const ColorModeContext = createContext({
 });
 
 // Port de ferre-pos/src/theme.ts → createAppTheme(mode).
-// Mismo sistema de diseño del escritorio; solo ajustamos la fuente a la
-// variable de next/font (Roboto self-hosted).
+// Mismo sistema de diseño del escritorio; Roboto vía @fontsource (mismas
+// métricas que el Tauri, sin el Roboto variable de next/font que cortaba
+// el label flotante del outlined).
 export const createAppTheme = (mode: PaletteMode) =>
   createTheme({
     palette: {
@@ -26,7 +27,7 @@ export const createAppTheme = (mode: PaletteMode) =>
       },
     },
     typography: {
-      fontFamily: ['var(--font-roboto)', '"Helvetica Neue"', "Arial", "sans-serif"].join(","),
+      fontFamily: ['Roboto', '"Helvetica Neue"', "Arial", "sans-serif"].join(","),
       h3: { fontWeight: 800 },
       h4: { fontWeight: 900 },
       h5: { fontWeight: 700, fontSize: "1.5rem" },

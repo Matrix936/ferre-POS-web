@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
-import { Roboto } from "next/font/google";
+import "@fontsource/roboto/300.css";
+import "@fontsource/roboto/400.css";
+import "@fontsource/roboto/500.css";
+import "@fontsource/roboto/700.css";
 import AppThemeProvider from "@/components/theme-provider";
 import "./theme.css";
 
@@ -8,19 +11,12 @@ export const metadata: Metadata = {
   description: "Panel de indicadores de solo lectura de la ferretería",
 };
 
-// Self-hosted en build time (next/font) — sin llamadas runtime a fonts.googleapis.com
-const roboto = Roboto({
-  weight: ["400", "500", "700"],
-  variable: "--font-roboto",
-  subsets: ["latin"],
-});
-
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="es">
-      <body className={roboto.variable}>
+      <body>
         <AppThemeProvider>{children}</AppThemeProvider>
       </body>
     </html>
