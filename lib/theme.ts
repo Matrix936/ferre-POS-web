@@ -1,5 +1,11 @@
+import { createContext } from "react";
 import { alpha, createTheme } from "@mui/material/styles";
 import type { PaletteMode } from "@mui/material";
+
+// Mismo ColorModeContext del escritorio (ferre-pos/src/theme.ts:5).
+export const ColorModeContext = createContext({
+  toggleColorMode: () => {},
+});
 
 // Port de ferre-pos/src/theme.ts → createAppTheme(mode).
 // Mismo sistema de diseño del escritorio; solo ajustamos la fuente a la

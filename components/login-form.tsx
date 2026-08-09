@@ -6,10 +6,23 @@ import { Alert, Box, Snackbar, TextField } from "@mui/material";
 import { createClient } from "@/lib/supabase/client";
 import AsyncButton from "@/components/async-button";
 
+// Mismo patrón de "recordar usuario" del escritorio (ferre-pos:last-login-user),
+// pero solo para la web; guarda únicamente el último email.
+const LAST_EMAIL_KEY = "ferre-pos-web:last-email";
+
+function readLastNameEmail(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return localStorage.getItem(LAST_EMAIL_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(readLastNameEmail);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -36,6 +49,12 @@ export default function LoginForm() {
     if (authError) {
       setError(authError.message);
       return;
+    }
+
+    try {
+      localStorage.setItem(LAST_EMAIL_KEY, email.trim());
+    } catch {
+      // almacenamiento no disponible (modo privado) — el login no debe fallar
     }
 
     const next = searchParams.get("next");

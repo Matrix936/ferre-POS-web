@@ -4,6 +4,7 @@ import { Box, Container, Paper, Typography } from "@mui/material";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import LoginForm from "@/components/login-form";
+import ThemeToggle from "@/components/theme-toggle";
 
 export const metadata: Metadata = { title: "Acceso · Ferre Dashboard" };
 
@@ -68,6 +69,9 @@ export default async function LoginPage() {
           </Suspense>
         </Paper>
       </Container>
+      <Suspense>
+        <ThemeToggle />
+      </Suspense>
     </Box>
   );
 }
