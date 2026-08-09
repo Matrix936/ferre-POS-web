@@ -194,6 +194,20 @@ end $$;
 -- ----------------------------------------------------------------------------
 
 -- ----------------------------------------------------------------------------
+-- 3.4 Vista segura de usuarios (solo id + nombre) para los reportes que deben
+--     mostrar quién operó (p. ej. cortes de caja). Se crea sin
+--     security_invoker, así que se ejecuta con los privilegios de su owner
+--     (equivalente a SECURITY DEFINER) y puede leer `usuarios` aunque esa tabla
+--     no tenga política SELECT para `authenticated`. La vista solo proyecta
+--     id/nombre: password_hash y el resto nunca se exponen.
+create or replace view public.dash_v_usuarios
+as
+select u.id, u.nombre
+from public.usuarios u;
+
+grant select on public.dash_v_usuarios to authenticated;
+
+-- ----------------------------------------------------------------------------
 -- 4) Funciones de indicadores (read-only, SECURITY INVOKER → respetan RLS)
 --    Replican 1:1 las queries del backend de escritorio (src-tauri/src/lib.rs):
 --      · get_indicador_ventas_blocking      → indicador_ventas / ventas_por_metodo
@@ -786,7 +800,7 @@ set search_path = public
 as $$
     select
         cs.id,
-        coalesce(u.nombre, ''),
+        coalesce(uv.nombre, ''),
         cs.sucursal_id,
         coalesce(s.nombre, ''),
         cs.fecha_apertura,
@@ -825,7 +839,7 @@ as $$
         end as diferencia,
         cs.estado
     from public.cajas_sesiones cs
-    inner join public.usuarios u on u.id = cs.usuario_id
+    inner join public.dash_v_usuarios uv on uv.id = cs.usuario_id
     inner join public.sucursales s on s.id = cs.sucursal_id
     where (p_sucursal_id is null or cs.sucursal_id = p_sucursal_id)
       and (p_desde is null or cs.fecha_apertura >= p_desde)
