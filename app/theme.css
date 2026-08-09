@@ -55,15 +55,15 @@ body {
   scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
 
-/* Spinner de AsyncButton (equiv. CircularProgress 16px) */
+/* Spinner de AsyncButton (equiv. CircularProgress 18px) */
 @keyframes fsp-spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
 
 .fsp-spinner {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   flex: 0 0 auto;
   border-radius: 50%;
   border: 2px solid currentColor;
@@ -71,9 +71,37 @@ body {
   animation: fsp-spin 0.7s linear infinite;
 }
 
+/* Logo del login — réplica del spin 3D de la app de escritorio (15s) */
+@keyframes fsp-logo-spin {
+  from { transform: perspective(600px) rotateY(0deg); }
+  to   { transform: perspective(600px) rotateY(360deg); }
+}
+
+.fsp-logo-spin {
+  animation: fsp-logo-spin 15s linear infinite;
+  transform-style: preserve-3d;
+  backface-visibility: visible;
+}
+
+/* Snackbar de feedback */
+@keyframes fsp-toast-in {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.fsp-toast {
+  animation: fsp-toast-in 200ms ease-in-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fsp-spinner {
     animation: none;
     transform: none;
+  }
+  .fsp-logo-spin {
+    animation: none;
+  }
+  .fsp-toast {
+    animation: none;
   }
 }

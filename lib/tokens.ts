@@ -23,40 +23,55 @@ export const tokens = {
 export const fontFamily =
   "var(--font-roboto), 'Helvetica Neue', Arial, sans-serif";
 
-/** Página centrada con fondo del theme (bg default). */
+/** Página centrada con fondo del bg default (LoginForm.tsx del escritorio). */
 export const pageSx: CSSProperties = {
   fontFamily,
   minHeight: "100vh",
-  display: "grid",
-  placeItems: "center",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   backgroundColor: tokens.bgPage,
-  padding: "clamp(1rem, 4vw, 2.5rem)",
+  padding: "1rem",
 };
 
-/** Tarjeta (papel) con radius 12px y sombra de MuiCard (theme.ts). */
+/**
+ * Tarjeta (Paper) del login real: elevation 0, borde divider,
+ * borderRadius 16 (MUI ratio 2), centrado en columna, p 32px/40px.
+ */
 export const cardSx: CSSProperties = {
   width: "100%",
-  maxWidth: 380,
+  maxWidth: 444,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
   backgroundColor: tokens.bgPaper,
-  borderRadius: 12,
+  borderRadius: 16,
   border: `1px solid ${tokens.divider}`,
-  boxShadow: "0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)",
-  padding: "clamp(1.5rem, 4vw, 2rem)",
+  padding: "clamp(2rem, 4vw, 2.5rem)",
 };
 
-/** Título de tarjeta — h6 (1.25rem, 600). */
-export const titleSx: CSSProperties = {
+export const logoWrapSx: CSSProperties = {
+  display: "flex",
+  justifyContent: "center",
+};
+
+export const logoSx: CSSProperties = {
+  width: "auto",
+  maxWidth: "100%",
+  maxHeight: 128,
+  height: "auto",
+  objectFit: "contain",
+  marginBottom: "0.75rem",
+};
+
+/** Tagline — "Gestión de Inventario y Ventas" (body1, text.secondary). */
+export const taglineSx: CSSProperties = {
   margin: 0,
-  fontSize: "1.25rem",
-  fontWeight: 600,
-};
-
-/** Subtítulo — body2 (0.875rem, 400) texto secundario. */
-export const subtitleSx: CSSProperties = {
-  margin: "0.25rem 0 0",
-  fontSize: "0.875rem",
+  fontSize: "1rem",
   fontWeight: 400,
   color: tokens.textSecondary,
+  textAlign: "center",
+  marginBottom: "1.5rem",
 };
 
 export const formSx: CSSProperties = {
@@ -64,7 +79,7 @@ export const formSx: CSSProperties = {
   flexDirection: "column",
   gap: "1rem",
   width: "100%",
-  marginTop: "1.5rem",
+  marginTop: "0.5rem",
 };
 
 export const fieldSx: CSSProperties = {
@@ -101,14 +116,13 @@ export const inputFocusSx: CSSProperties = {
   boxShadow: `0 0 0 3px ${tokens.primaryLight}`,
 };
 
-/** Botón primario — MuiButton: radius 8, disableElevation, button 0.875rem/500. */
+/** Botón primario — MuiButton: radius 8, disableElevation, button 0.875rem/500, py:1 px:3. */
 export const buttonSx: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
   gap: "0.5rem",
-  minHeight: 42,
-  padding: "0.625rem 1.25rem",
+  padding: "0.5rem 1.5rem",
   fontSize: "0.875rem",
   fontWeight: 500,
   textTransform: "none",
@@ -121,22 +135,35 @@ export const buttonSx: CSSProperties = {
   transition: "background-color 200ms ease-in-out",
 };
 
-/** Alerta de error — MuiAlert-standardError (fondo alpha + borde alpha). */
-export const errorAlertSx: CSSProperties = {
+/** Fila del botón de submit — alineado a la derecha (LoginForm escritorio). */
+export const buttonRowSx: CSSProperties = {
   display: "flex",
-  alignItems: "flex-start",
-  gap: "0.5rem",
-  margin: 0,
-  padding: "0.625rem 0.75rem",
-  borderRadius: 12,
-  fontSize: "0.875rem",
-  lineHeight: 1.45,
-  color: tokens.errorDark,
-  backgroundColor: "rgba(211,47,47,0.1)",
-  border: "1px solid rgba(211,47,47,0.26)",
+  justifyContent: "flex-end",
+  marginTop: "0.5rem",
 };
 
-export const errorIconSx: CSSProperties = {
-  flex: "0 0 auto",
-  marginTop: "0.15em",
+/**
+ * Snackbar de error — replica FeedbackSnackbar (abajo-centro, blur,
+ * borde izquierdo de 4px de severidad, sombra flotante).
+ */
+export const snackbarSx: CSSProperties = {
+  position: "fixed",
+  left: "50%",
+  transform: "translateX(-50%)",
+  bottom: 24,
+  zIndex: 1500,
+  display: "flex",
+  alignItems: "center",
+  gap: "0.5rem",
+  maxWidth: "calc(100vw - 24px)",
+  padding: "0.75rem 1rem",
+  borderRadius: 12,
+  fontSize: "0.875rem",
+  color: tokens.errorDark,
+  backgroundColor: tokens.bgPaper,
+  border: "1px solid rgba(211,47,47,0.24)",
+  borderLeft: "4px solid rgba(211,47,47,0.72)",
+  boxShadow: "0 16px 36px rgba(15,23,42,0.12)",
+  backdropFilter: "blur(12px)",
+  WebkitBackdropFilter: "blur(12px)",
 };
