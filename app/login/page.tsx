@@ -21,11 +21,12 @@ export default async function LoginPage() {
   return (
     <Box
       sx={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         bgcolor: "background.default",
+        "@supports not (min-height: 100dvh)": { minHeight: "100vh" },
       }}
     >
       <Container component="main" maxWidth="xs">

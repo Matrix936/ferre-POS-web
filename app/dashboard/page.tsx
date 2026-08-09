@@ -1,7 +1,7 @@
-import Link from "next/link";
-import { redirect } from "next/navigation";
+import { Box, Chip, Paper, Typography } from "@mui/material";
 import { createClient } from "@/lib/supabase/server";
-import { RANGOS, rangoAFechas, type Rango } from "@/lib/format";
+import { redirect } from "next/navigation";
+import { RANGOS, rangoAFechas, dineroCentavos, cantidad, type Rango } from "@/lib/format";
 import {
   fila,
   type IndicadorVentas,
@@ -13,9 +13,10 @@ import {
   type VentaPorSucursal,
 } from "@/lib/dashboard-types";
 import DateRangePicker from "@/components/date-range-picker";
-import KpiCard from "@/components/kpi-card";
+import { DashboardLayout } from "@/components/layout/dashboard-layout";
+import { ExecutiveCard } from "@/components/executive-card";
+import { SimpleDonutChart } from "@/components/simple-charts";
 import VentasPorDiaChart from "@/components/charts/ventas-por-dia";
-import VentasPorMetodoChart from "@/components/charts/ventas-por-metodo";
 import ProductosMasVendidosChart from "@/components/charts/productos-mas-vendidos";
 import VentasPorSucursalChart from "@/components/charts/ventas-por-sucursal";
 import InventarioBajoStockTable from "@/components/inventario-bajo-stock-table";
@@ -23,20 +24,6 @@ import InventarioBajoStockTable from "@/components/inventario-bajo-stock-table";
 type Props = {
   searchParams: Promise<{ rango?: string }>;
 };
-
-const card = {
-  background: "#fff",
-  border: "1px solid #e5e7eb",
-  borderRadius: 12,
-  padding: "1.25rem",
-  boxShadow: "0 1px 2px rgba(0,0,0,.04)",
-} as const;
-
-const sectionTitle = {
-  fontSize: "1.05rem",
-  margin: "0 0 1rem",
-  color: "#111827",
-} as const;
 
 export default async function DashboardPage({ searchParams }: Props) {
   const supabase = await createClient();
@@ -54,7 +41,6 @@ export default async function DashboardPage({ searchParams }: Props) {
   const rango: Rango = RANGOS.some((r) => r.value === raw) ? (raw as Rango) : "30d";
   const { desde, hasta } = rangoAFechas(rango);
 
-  // Scope por rol: SUPERADMIN/ADMIN ven todas las sucursales (p_sucursal_id = null).
   const rol = user.app_metadata?.role ?? null;
   const esDueño = rol === "SUPERADMIN" || rol === "ADMIN";
   const p_sucursal_id = esDueño ? null : (user.app_metadata?.sucursal_id ?? null);
@@ -62,7 +48,7 @@ export default async function DashboardPage({ searchParams }: Props) {
   const rpcOpts = { p_sucursal_id };
   const iso = { p_desde: desde, p_hasta: hasta };
 
-const [{ data: dVentas }, { data: dMetodo }, { data: dTop }, { data: dInv }, { data: dBajo }, { data: dDia }, { data: dSuc }] =
+  const [{ data: dVentas }, { data: dMetodo }, { data: dTop }, { data: dInv }, { data: dBajo }, { data: dDia }, { data: dSuc }] =
     await Promise.all([
       supabase.rpc("indicador_ventas", { ...iso, ...rpcOpts, p_metodo_pago: null }),
       supabase.rpc("ventas_por_metodo", { ...iso, p_sucursal_id }),
@@ -81,83 +67,82 @@ const [{ data: dVentas }, { data: dMetodo }, { data: dTop }, { data: dInv }, { d
   const porDia = (Array.isArray(dDia) ? dDia : []) as VentaPorDia[];
   const porSuc = (Array.isArray(dSuc) ? dSuc : []) as VentaPorSucursal[];
 
+  const donutData = metodo.map((m) => ({
+    label: (m.metodo_pago?.[0]?.toUpperCase() ?? "") + (m.metodo_pago?.slice(1) ?? ""),
+    value: Number(m.total_centavos ?? 0),
+  }));
+
+  const totalVendido = Number(ind?.total_vendido_centavos ?? 0);
+  const transacciones = Number(ind?.transacciones ?? 0);
+  const ticketPromedio = Number(ind?.ticket_promedio_centavos ?? 0);
+  const ventasCanceladas = Number(ind?.ventas_canceladas ?? 0);
+  const credito = Number(ind?.ventas_credito_centavos ?? 0);
+  const contado = Number(ind?.ventas_contado_centavos ?? 0);
+  const valorInventario = Number(inv?.valor_centavos ?? 0);
+  const stockTotal = Number(inv?.stock_total ?? 0);
+  const stockBajo = Number(inv?.stock_bajo ?? bajo.length);
+  const sinStock = Number(inv?.sin_stock ?? 0);
+  const sobreStock = Number(inv?.sobre_stock ?? 0);
+
   return (
-    <main style={{ fontFamily: "system-ui, sans-serif", padding: "2rem", maxWidth: 1200, margin: "0 auto" }}>
-      <header style={{ display: "flex", flexWrap: "wrap", gap: "1rem", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
-        <div>
-          <h1 style={{ margin: 0 }}>Panel de indicadores</h1>
-          <p style={{ margin: "0.25rem 0 0", color: "#6b7280" }}>
-            Conectado como <strong>{user.email}</strong>
-            {esDueño ? <> · <strong>todas las sucursales</strong></> : user.app_metadata?.sucursal_id ? <> · sucursal</> : null}
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+    <DashboardLayout
+      user={{ email: user.email, rol: rol ?? undefined }}
+    >
+      <Box sx={{ width: "100%", mt: 2 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 2, alignItems: "center", mb: 3 }}>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>
+              Dashboard Analítico
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Conectado como <strong>{user.email}</strong>
+              {esDueño ? <> · <strong>todas las sucursales</strong></> : user.app_metadata?.sucursal_id ? <> · sucursal</> : null}
+            </Typography>
+          </Box>
           <DateRangePicker rango={rango} />
-          <form action={"/auth/signout"} method="post">
-            <button type="submit" style={{ padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", cursor: "pointer" }}>
-              Cerrar sesión
-            </button>
-          </form>
-        </div>
-      </header>
+        </Box>
 
-      {ind ? (
-        <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
-          <KpiCard label="Total vendido" value={ind.total_vendido_centavos} moneda />
-          <KpiCard label="Transacciones (completadas)" value={ind.transacciones} />
-          <KpiCard label="Ticket promedio" value={ind.ticket_promedio_centavos} moneda />
-          <KpiCard label="Ventas canceladas" value={ind.ventas_canceladas} />
-          <KpiCard label="Crédito" value={ind.ventas_credito_centavos} moneda />
-          <KpiCard label="Contado" value={ind.ventas_contado_centavos} moneda />
-        </section>
-      ) : (
-        <p style={{ color: "#6b7280" }}>Sin datos de ventas en este rango.</p>
-      )}
+        <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", xl: "repeat(4, 1fr)" }, mb: 2 }}>
+          <ExecutiveCard label="Ventas" value={dineroCentavos(totalVendido)} helper={ind ? `${cantidad(transacciones)} tickets` : undefined} />
+          <ExecutiveCard label="Ticket promedio" value={dineroCentavos(ticketPromedio)} helper="Venta promedio por ticket" />
+          <ExecutiveCard label="Ventas canceladas" value={cantidad(ventasCanceladas)} helper="Operaciones canceladas" />
+          <ExecutiveCard label="Crédito" value={dineroCentavos(credito)} helper="Crédito pendiente" />
+          <ExecutiveCard label="Contado" value={dineroCentavos(contado)} helper="Ventas de contado" />
+          <ExecutiveCard label="Inventario valuado" value={dineroCentavos(valorInventario)} helper={`${cantidad(stockTotal)} piezas`} />
+          <ExecutiveCard label="Stock bajo" value={cantidad(stockBajo)} helper={`${cantidad(sinStock)} sin stock`} />
+          <ExecutiveCard label="Sobreinventario" value={cantidad(sobreStock)} helper="Capital detenido" />
+        </Box>
 
-      <section style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
-        <div style={card}>
-          <h2 style={sectionTitle}>Ventas por día</h2>
+        <Paper elevation={1} sx={{ p: 2, borderRadius: 2, mb: 2 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 1 }}>
+            Alertas gerenciales
+          </Typography>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+            <Chip size="small" label={`${cantidad(stockBajo)} productos en bajo stock`} color={stockBajo > 0 ? "warning" : "success"} variant="outlined" />
+            <Chip size="small" label={`${cantidad(sinStock)} productos sin stock`} color={sinStock > 0 ? "error" : "success"} variant="outlined" />
+            <Chip size="small" label={`${cantidad(sobreStock)} sobreinventario`} color={sobreStock > 0 ? "info" : "success"} variant="outlined" />
+            <Chip size="small" label={`${cantidad(ventasCanceladas)} ventas canceladas`} color={ventasCanceladas > 0 ? "warning" : "success"} variant="outlined" />
+          </Box>
+        </Paper>
+
+        <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "1.25fr 0.75fr" }, mb: 2 }}>
+          <Box sx={{ width: "100%" }}>
+            <ProductosMasVendidosChart data={top} />
+          </Box>
+          <Box sx={{ width: "100%" }}>
+            <SimpleDonutChart title="Ingresos por forma de pago" subtitle="Composición del periodo" data={donutData} format="currency" />
+          </Box>
+        </Box>
+
+        <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, mb: 2 }}>
           <VentasPorDiaChart data={porDia} />
-        </div>
-        <div style={card}>
-          <h2 style={sectionTitle}>Por método de pago</h2>
-          <VentasPorMetodoChart data={metodo} />
-        </div>
-      </section>
-
-      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
-        <div style={card}>
-          <h2 style={sectionTitle}>Top productos más vendidos</h2>
-          <ProductosMasVendidosChart data={top} />
-        </div>
-        <div style={card}>
-          <h2 style={sectionTitle}>Ventas por sucursal</h2>
           <VentasPorSucursalChart data={porSuc} />
-        </div>
-      </section>
+        </Box>
 
-      <section style={card}>
-        <h2 style={sectionTitle}>Inventario</h2>
-        {inv ? (
-          <>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "1rem", marginBottom: "1rem" }}>
-              <KpiCard label="Productos en inventario" value={inv.productos_en_inventario} />
-              <KpiCard label="Valor (costo)" value={inv.valor_centavos} moneda />
-              <KpiCard label="Stock total" value={inv.stock_total} />
-              <KpiCard label="Bajo stock" value={inv.stock_bajo} />
-              <KpiCard label="Sin stock" value={inv.sin_stock} />
-              <KpiCard label="Sobre stock" value={inv.sobre_stock} />
-            </div>
-            <InventarioBajoStockTable data={bajo} />
-          </>
-        ) : (
-          <p style={{ color: "#6b7280" }}>Sin datos de inventario.</p>
-        )}
-      </section>
-
-      <p style={{ marginTop: "2rem", fontSize: "0.85rem", color: "#9ca3af" }}>
-        Fase 1 · dashboard de solo lectura · <Link href="/login">Ir al inicio de sesión</Link>
-      </p>
-    </main>
+        <Box sx={{ mb: 2 }}>
+          <InventarioBajoStockTable data={bajo} />
+        </Box>
+      </Box>
+    </DashboardLayout>
   );
 }
