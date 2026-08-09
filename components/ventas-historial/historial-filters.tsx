@@ -22,14 +22,12 @@ const ESTADOS = [
 
 export default function HistorialFilters({
   value,
-  onChange,
   sucursales,
   usuarios,
   showSucursal,
   showUsuario,
 }: {
   value: HistorialFilterValue;
-  onChange: (next: HistorialFilterValue) => void;
   sucursales: { id: string; nombre: string }[];
   usuarios: { id: string; nombre: string }[];
   showSucursal: boolean;
@@ -60,7 +58,6 @@ export default function HistorialFilters({
     if (field === "folio") {
       setFolioLocal(v);
     } else {
-      onChange(next);
       commit(next);
     }
   };
@@ -71,7 +68,6 @@ export default function HistorialFilters({
     const nextFolio = debouncedFolio.trim();
     if (nextFolio === value.folio) return;
     const next = { ...value, folio: nextFolio };
-    onChange(next);
     commit(next);
   }, [debouncedFolio]);
 

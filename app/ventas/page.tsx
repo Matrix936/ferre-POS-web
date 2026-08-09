@@ -1,6 +1,6 @@
 import { Box, Typography } from "@mui/material";
 import { dashboardScope } from "@/lib/dashboard-scope";
-import { fila, type HistorialVentaRow } from "@/lib/dashboard-types";
+import type { HistorialVentaRow } from "@/lib/dashboard-types";
 import DateRangePicker from "@/components/date-range-picker";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import HistorialFilters, { type HistorialFilterValue } from "@/components/ventas-historial/historial-filters";
@@ -76,7 +76,6 @@ export default async function VentasHistorialPage({ searchParams }: Props) {
         <Box sx={{ p: 2, borderRadius: 2, border: "1px solid", borderColor: "divider", bgcolor: "background.paper", mb: 2 }}>
           <HistorialFilters
             value={filterValue}
-            onChange={() => undefined}
             sucursales={catalogoSucursales}
             usuarios={catalogoUsuarios}
             showSucursal={esDueño}
