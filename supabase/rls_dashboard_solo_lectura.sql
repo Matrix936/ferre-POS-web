@@ -642,11 +642,47 @@ begin
       and (p_desde is null or c.fecha >= p_desde)
       and (p_hasta is null or c.fecha <= p_hasta);
 
-    -- Cuentas por cobrar: saldo deudor acumulado.
-    select coalesce(round(sum(c.saldo_deudor * 100)), 0)::bigint
-      into v_cxc
-    from public.clientes c
-    where c.eliminado = false;
+    -- Cuentas por cobrar: saldo deudor de los clientes. Sin sucursal es la
+    -- suma simple; con sucursal se prorratea igual que el escritorio
+    -- (financiero_resumen → get_indicador_financiero_blocking): la deuda de
+    -- cada cliente se reparte según la proporción de su crédito histórico en
+    -- esa sucursal (clientes no tiene sucursal_id).
+    if p_sucursal_id is null then
+        select coalesce(round(sum(c.saldo_deudor * 100)), 0)::bigint
+          into v_cxc
+        from public.clientes c
+        where c.eliminado = false;
+    else
+        select coalesce(round(sum(
+            c.saldo_deudor * case
+                when tc.total_credito_global > 0
+                then round(sc.total_credito_sucursal::numeric / tc.total_credito_global, 6)
+                else 0 end
+        ) * 100), 0)::bigint
+          into v_cxc
+        from public.clientes c
+        inner join (
+            select v.cliente_id,
+                   coalesce(sum(v.total_centavos), 0) as total_credito_sucursal
+            from public.ventas v
+            where v.estado = 'COMPLETADA'
+              and v.metodo_pago = 'CREDITO'
+              and v.cliente_id is not null
+              and v.sucursal_id = p_sucursal_id
+            group by v.cliente_id
+        ) sc on sc.cliente_id = c.id
+        inner join (
+            select v.cliente_id,
+                   coalesce(sum(v.total_centavos), 0) as total_credito_global
+            from public.ventas v
+            where v.estado = 'COMPLETADA'
+              and v.metodo_pago = 'CREDITO'
+              and v.cliente_id is not null
+            group by v.cliente_id
+        ) tc on tc.cliente_id = c.id
+        where c.eliminado = false
+          and c.saldo_deudor > 0;
+    end if;
 
     -- Cuentas por pagar: compras pendientes.
     select coalesce(sum(total_centavos), 0)
