@@ -5,7 +5,7 @@ import { fila, type RentabilidadResumen, type ProductoRentabilidad } from "@/lib
 import DateRangePicker from "@/components/date-range-picker";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { ExecutiveCard } from "@/components/executive-card";
-import { SimpleBarChart } from "@/components/simple-charts";
+import { SimpleBarChart, SimpleDonutChart } from "@/components/simple-charts";
 import RentabilidadProductosTable from "@/components/rentabilidad-productos-table";
 
 type Props = {
@@ -44,6 +44,19 @@ export default async function RentabilidadPage({ searchParams }: Props) {
     value: Number(p.utilidad_centavos ?? 0),
   }));
 
+  const marcaTotales = new Map<string, number>();
+  productos.forEach((p) => {
+    const marca = p.marca?.trim() ? p.marca : "Sin marca";
+    marcaTotales.set(marca, (marcaTotales.get(marca) ?? 0) + Number(p.utilidad_centavos ?? 0));
+  });
+  const marcasOrdenadas = [...marcaTotales.entries()].sort((a, b) => b[1] - a[1]);
+  const marcasPrincipales = marcasOrdenadas.slice(0, 5);
+  const restoUtilidad = marcasOrdenadas.slice(5).reduce((s, [, v]) => s + v, 0);
+  const marcaData = [
+    ...marcasPrincipales.map(([label, value]) => ({ label, value })),
+    ...(restoUtilidad > 0 ? [{ label: "Otras marcas", value: restoUtilidad }] : []),
+  ].filter((d) => d.value > 0);
+
   return (
     <DashboardLayout user={{ email: user.email, rol: (user.app_metadata?.role as string | undefined) ?? undefined }}>
       <Box sx={{ width: "100%", mt: 2 }}>
@@ -67,8 +80,9 @@ export default async function RentabilidadPage({ searchParams }: Props) {
           <ExecutiveCard label="Margen bruto" value={`${margen.toLocaleString("es-MX", { maximumFractionDigits: 1 })}%`} helper="Utilidad sobre venta" delta={delta("margen_porcentaje")} />
         </Box>
 
-        <Box sx={{ mb: 2 }}>
+        <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, mb: 2 }}>
           <SimpleBarChart title="Top 10 por utilidad" subtitle="Productos con mayor utilidad en el periodo" data={topData} format="currency" />
+          <SimpleDonutChart title="Utilidad por marca" subtitle="Distribución de la utilidad generada" data={marcaData} format="currency" />
         </Box>
 
         <RentabilidadProductosTable data={productos} />

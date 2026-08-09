@@ -12,6 +12,7 @@ import {
   type VentaPorDia,
   type VentaPorSucursal,
   type RentabilidadResumen,
+  type VentaReciente,
 } from "@/lib/dashboard-types";
 import DateRangePicker from "@/components/date-range-picker";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
@@ -21,6 +22,7 @@ import VentasPorDiaChart from "@/components/charts/ventas-por-dia";
 import ProductosMasVendidosChart from "@/components/charts/productos-mas-vendidos";
 import VentasPorSucursalChart from "@/components/charts/ventas-por-sucursal";
 import InventarioBajoStockTable from "@/components/inventario-bajo-stock-table";
+import VentasRecientesCard from "@/components/ventas-recientes-card";
 
 type Props = {
   searchParams: Promise<{ rango?: string }>;
@@ -51,7 +53,7 @@ export default async function DashboardPage({ searchParams }: Props) {
   const prev = periodoAnterior(desde, hasta);
   const prevIso = { p_desde: prev.desde, p_hasta: prev.hasta };
 
-  const [{ data: dVentas }, { data: dMetodo }, { data: dTop }, { data: dInv }, { data: dBajo }, { data: dDia }, { data: dSuc }, { data: dRent }, { data: dVentasPrev }, { data: dRentPrev }] =
+  const [{ data: dVentas }, { data: dMetodo }, { data: dTop }, { data: dInv }, { data: dBajo }, { data: dDia }, { data: dSuc }, { data: dRent }, { data: dVentasPrev }, { data: dRentPrev }, { data: dDiaPrev }, { data: dRec }] =
     await Promise.all([
       supabase.rpc("indicador_ventas", { ...iso, ...rpcOpts, p_metodo_pago: null }),
       supabase.rpc("ventas_por_metodo", { ...iso, p_sucursal_id }),
@@ -63,6 +65,8 @@ export default async function DashboardPage({ searchParams }: Props) {
       supabase.rpc("rentabilidad_resumen", { ...iso, ...rpcOpts }),
       supabase.rpc("indicador_ventas", { ...prevIso, ...rpcOpts, p_metodo_pago: null }),
       supabase.rpc("rentabilidad_resumen", { ...prevIso, ...rpcOpts }),
+      supabase.rpc("ventas_por_dia", { ...prevIso, p_sucursal_id }),
+      supabase.rpc("dashboard_recientes", { ...iso, p_sucursal_id, p_limite: 6 }),
     ]);
 
   const ind = fila<IndicadorVentas>(dVentas);
@@ -72,6 +76,8 @@ export default async function DashboardPage({ searchParams }: Props) {
   const bajo = (Array.isArray(dBajo) ? dBajo : []) as ProductoBajoStock[];
   const porDia = (Array.isArray(dDia) ? dDia : []) as VentaPorDia[];
   const porSuc = (Array.isArray(dSuc) ? dSuc : []) as VentaPorSucursal[];
+  const porDiaPrev = (Array.isArray(dDiaPrev) ? dDiaPrev : []) as VentaPorDia[];
+  const recientes = (Array.isArray(dRec) ? dRec : []) as VentaReciente[];
   const rent = fila<RentabilidadResumen>(dRent);
   const indPrev = fila<IndicadorVentas>(dVentasPrev);
   const rentPrev = fila<RentabilidadResumen>(dRentPrev);
@@ -150,12 +156,13 @@ export default async function DashboardPage({ searchParams }: Props) {
         </Box>
 
         <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, mb: 2 }}>
-          <VentasPorDiaChart data={porDia} />
+          <VentasPorDiaChart data={porDia} prev={porDiaPrev} />
           <VentasPorSucursalChart data={porSuc} />
         </Box>
 
-        <Box sx={{ mb: 2 }}>
+        <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "1.3fr 0.7fr" }, mb: 2, alignItems: "stretch" }}>
           <InventarioBajoStockTable data={bajo} />
+          <VentasRecientesCard data={recientes} />
         </Box>
       </Box>
     </DashboardLayout>

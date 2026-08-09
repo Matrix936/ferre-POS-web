@@ -499,8 +499,8 @@ begin
     return query
     with agg as (
         select
-            coalesce(sum(dv.cantidad * dv.precio_venta_pactado_centavos), 0)   as venta,
-            coalesce(sum(dv.cantidad * dv.costo_unitario_pactado_centavos), 0) as costo
+            coalesce(round(sum(dv.cantidad * dv.precio_venta_pactado_centavos)), 0)::bigint   as venta,
+            coalesce(round(sum(dv.cantidad * dv.costo_unitario_pactado_centavos)), 0)::bigint as costo
         from public.detalle_ventas dv
         inner join public.ventas v on v.id = dv.venta_id
         where v.estado = 'COMPLETADA'
@@ -545,12 +545,12 @@ as $$
         p.descripcion,
         coalesce(m.nombre, ''),
         coalesce(sum(dv.cantidad), 0) as unidades,
-        coalesce(sum(dv.cantidad * dv.precio_venta_pactado_centavos), 0)   as venta,
-        coalesce(sum(dv.cantidad * dv.costo_unitario_pactado_centavos), 0) as costo,
+        coalesce(round(sum(dv.cantidad * dv.precio_venta_pactado_centavos)), 0)::bigint   as venta,
+        coalesce(round(sum(dv.cantidad * dv.costo_unitario_pactado_centavos)), 0)::bigint as costo,
         coalesce(
-            sum(dv.cantidad * dv.precio_venta_pactado_centavos)
-          - sum(dv.cantidad * dv.costo_unitario_pactado_centavos), 0
-        ) as utilidad,
+            round(sum(dv.cantidad * dv.precio_venta_pactado_centavos))
+          - round(sum(dv.cantidad * dv.costo_unitario_pactado_centavos)), 0
+        )::bigint as utilidad,
         case
             when sum(dv.cantidad * dv.precio_venta_pactado_centavos) > 0
             then round(
@@ -1090,6 +1090,284 @@ begin
     order by p.descripcion;
 end $$;
 
+-- 4.13b Consolidado exacto de caja del periodo (sin el límite de 100 turnos).
+--        Réplica del agregado de get_indicador_caja del escritorio.
+create or replace function public.caja_resumen(
+    p_desde       timestamptz default null,
+    p_hasta       timestamptz default null,
+    p_sucursal_id text        default null
+)
+returns table (
+    turnos_total              bigint,
+    turnos_abiertos           bigint,
+    turnos_cerrados           bigint,
+    turnos_con_diferencia     bigint,
+    monto_inicial_centavos    bigint,
+    ventas_efectivo_centavos  bigint,
+    ingresos_centavos         bigint,
+    egresos_centavos          bigint,
+    monto_esperado_centavos   bigint,
+    monto_final_real_centavos bigint,
+    diferencia_centavos       bigint
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+    select
+        count(*),
+        coalesce(count(*) filter (where estado = 'ABIERTA'), 0),
+        coalesce(count(*) filter (where estado = 'CERRADA'), 0),
+        coalesce(count(*) filter (where monto_final_real_centavos is not null), 0),
+        coalesce(sum(monto_inicial_centavos), 0),
+        coalesce(sum(ventas_efectivo), 0),
+        coalesce(sum(ingresos), 0),
+        coalesce(sum(egresos), 0),
+        coalesce(sum(monto_esperado_centavos), 0),
+        coalesce(sum(monto_final_real_centavos), 0),
+        coalesce(sum(diferencia), 0)
+    from (
+        select
+            cs.estado,
+            cs.monto_inicial_centavos,
+            cs.monto_esperado_centavos,
+            cs.monto_final_real_centavos,
+            coalesce((
+                select sum(v.total_centavos)
+                from public.ventas v
+                where v.usuario_id = cs.usuario_id
+                  and v.sucursal_id = cs.sucursal_id
+                  and v.metodo_pago = 'EFECTIVO'
+                  and v.estado = 'COMPLETADA'
+                  and v.fecha >= cs.fecha_apertura
+                  and (cs.fecha_cierre is null or v.fecha <= cs.fecha_cierre)
+            ), 0) as ventas_efectivo,
+            coalesce((
+                select sum(cm.monto_centavos)
+                from public.caja_movimientos cm
+                where cm.sesion_id = cs.id
+                  and cm.tipo = 'INGRESO'
+                  and coalesce(cm.afecta_efectivo, true)
+            ), 0) as ingresos,
+            coalesce((
+                select sum(cm.monto_centavos)
+                from public.caja_movimientos cm
+                where cm.sesion_id = cs.id
+                  and cm.tipo = 'EGRESO'
+                  and coalesce(cm.afecta_efectivo, true)
+            ), 0) as egresos,
+            case
+                when cs.monto_final_real_centavos is not null
+                then cs.monto_final_real_centavos - cs.monto_esperado_centavos
+                else 0
+            end as diferencia
+        from public.cajas_sesiones cs
+        where (p_sucursal_id is null or cs.sucursal_id = p_sucursal_id)
+          and (p_desde is null or cs.fecha_apertura >= p_desde)
+          and (p_hasta is null or cs.fecha_apertura <= p_hasta)
+    ) c
+$$;
+
+-- 4.14 Ventas recientes (feed del dashboard, últimas N por fecha).
+create or replace function public.dashboard_recientes(
+    p_desde       timestamptz default null,
+    p_hasta       timestamptz default null,
+    p_sucursal_id text        default null,
+    p_limite      integer     default 6
+)
+returns table (
+    id              text,
+    folio           text,
+    fecha           timestamptz,
+    total_centavos  bigint,
+    metodo_pago     text,
+    tipo_origen     text,
+    estado          text,
+    cliente_nombre  text,
+    usuario_nombre  text,
+    sucursal_nombre text
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+    select
+        hv.id,
+        hv.folio,
+        hv.fecha,
+        hv.total_centavos,
+        hv.metodo_pago,
+        hv.tipo_origen,
+        hv.estado,
+        hv.cliente_nombre,
+        hv.usuario_nombre,
+        hv.sucursal_nombre
+    from (
+        select
+            v.id as id,
+            '' as folio,
+            v.fecha as fecha,
+            v.total_centavos as total_centavos,
+            v.metodo_pago as metodo_pago,
+            coalesce(nullif(v.tipo_origen, ''), 'VENTA') as tipo_origen,
+            v.estado as estado,
+            coalesce(c.nombre, v.cliente_rapido_nombre, '') as cliente_nombre,
+            u.nombre as usuario_nombre,
+            s.nombre as sucursal_nombre
+        from public.ventas v
+        inner join public.sucursales s      on s.id = v.sucursal_id
+        inner join public.dash_v_usuarios u on u.id = v.usuario_id
+        left join public.clientes c        on c.id = v.cliente_id
+        where coalesce(nullif(v.tipo_origen, ''), 'VENTA') <> 'APARTADO'
+          and (p_sucursal_id is null or v.sucursal_id = p_sucursal_id)
+          and (p_desde is null or v.fecha >= p_desde)
+          and (p_hasta is null or v.fecha <= p_hasta)
+        union all
+        select
+            a.id as id,
+            a.folio as folio,
+            a.fecha as fecha,
+            a.total_centavos as total_centavos,
+            'APARTADO' as metodo_pago,
+            'APARTADO' as tipo_origen,
+            a.estado as estado,
+            coalesce(c.nombre, a.nombre_referencia, '') as cliente_nombre,
+            u.nombre as usuario_nombre,
+            s.nombre as sucursal_nombre
+        from public.apartados a
+        inner join public.sucursales s      on s.id = a.sucursal_id
+        inner join public.dash_v_usuarios u on u.id = a.usuario_id
+        left join public.clientes c        on c.id = a.cliente_id
+        where coalesce(a.eliminado, false) = false
+          and (p_sucursal_id is null or a.sucursal_id = p_sucursal_id)
+          and (p_desde is null or a.fecha >= p_desde)
+          and (p_hasta is null or a.fecha <= p_hasta)
+    ) hv
+    order by hv.fecha desc
+    limit greatest(p_limite, 0);
+$$;
+
+-- 4.15 Movimientos de caja (ingresos/egresos) paginados por updated_at.
+--        Réplica de get_movimientos_caja_page del escritorio; cada fila trae el
+--        total de registros del filtro (count(*) over) para paginar.
+create or replace function public.movimientos_caja(
+    p_desde       timestamptz default null,
+    p_hasta       timestamptz default null,
+    p_sucursal_id text        default null,
+    p_pagina      integer     default 1,
+    p_por_pagina  integer     default 50
+)
+returns table (
+    id              text,
+    fecha           timestamptz,
+    tipo            text,
+    monto_centavos  bigint,
+    motivo          text,
+    afecta_efectivo boolean,
+    sesion_id       text,
+    sesion_estado   text,
+    usuario_nombre  text,
+    sucursal_nombre text,
+    total           bigint
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+    select
+        cm.id,
+        cm.updated_at,
+        cm.tipo,
+        cm.monto_centavos,
+        coalesce(nullif(cm.motivo, ''), 'S/V'),
+        coalesce(cm.afecta_efectivo, true),
+        cm.sesion_id,
+        cs.estado,
+        coalesce(uv.nombre, ''),
+        coalesce(s.nombre, ''),
+        count(*) over () as total
+    from public.caja_movimientos cm
+    inner join public.cajas_sesiones cs on cs.id = cm.sesion_id
+    inner join public.dash_v_usuarios uv on uv.id = cs.usuario_id
+    inner join public.sucursales s      on s.id = cm.sucursal_id
+    where (p_sucursal_id is null or cm.sucursal_id = p_sucursal_id)
+      and (p_desde is null or cm.updated_at >= p_desde)
+      and (p_hasta is null or cm.updated_at <= p_hasta)
+    order by cm.updated_at desc
+    limit greatest(p_por_pagina, 1)
+    offset greatest(p_pagina - 1, 0) * greatest(p_por_pagina, 1);
+$$;
+
+-- 4.16 Totales del historial filtrado (venta total, tickets, ticket promedio)
+--        con los mismos filtros que ventas_historial_page. Evita descargar todo
+--        el resultado solo para sumar.
+create or replace function public.ventas_historial_resumen(
+    p_desde       timestamptz default null,
+    p_hasta       timestamptz default null,
+    p_sucursal_id text        default null,
+    p_usuario_id  text        default null,
+    p_folio       text        default null,
+    p_estado      text        default null
+)
+returns table (
+    venta_total_centavos     bigint,
+    tickets                  bigint,
+    ticket_promedio_centavos bigint
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+    select
+        coalesce(sum(hv.total_centavos), 0),
+        count(*),
+        case
+            when count(*) > 0 then coalesce(round(sum(hv.total_centavos)::numeric / count(*)), 0)::bigint
+            else 0
+        end
+    from (
+        select
+            v.id as id,
+            v.total_centavos as total_centavos,
+            v.fecha as fecha,
+            v.estado as estado,
+            v.sucursal_id as sucursal_id,
+            v.usuario_id as usuario_id,
+            coalesce(nullif(v.tipo_origen, ''), 'VENTA') as tipo_origen,
+            '' as folio,
+            '' as folio_apartado
+        from public.ventas v
+        where coalesce(nullif(v.tipo_origen, ''), 'VENTA') <> 'APARTADO'
+        union all
+        select
+            a.id,
+            a.total_centavos,
+            a.fecha,
+            a.estado,
+            a.sucursal_id,
+            a.usuario_id,
+            'APARTADO',
+            a.folio,
+            a.folio
+        from public.apartados a
+        where coalesce(a.eliminado, false) = false
+    ) hv
+    where (p_desde is null or hv.fecha >= p_desde)
+      and (p_hasta is null or hv.fecha <= p_hasta)
+      and (p_sucursal_id is null or hv.sucursal_id = p_sucursal_id)
+      and (p_usuario_id is null or hv.usuario_id = p_usuario_id)
+      and (p_estado is null or hv.estado = upper(p_estado))
+      and (
+          p_folio is null
+          or hv.id ilike '%' || p_folio || '%'
+          or hv.folio_apartado ilike '%' || p_folio || '%'
+      );
+$$;
+
 -- ----------------------------------------------------------------------------
 -- 5) Conceder a `authenticated` la ejecución de las funciones read-only.
 --    (Después del revoke global del paso 1.)
@@ -1109,6 +1387,10 @@ grant execute on function public.cuentas_por_pagar_aging(text) to authenticated;
 grant execute on function public.turnos_resumen(timestamptz, timestamptz, text, integer) to authenticated;
 grant execute on function public.ventas_historial_page(timestamptz, timestamptz, text, text, text, text, integer, integer) to authenticated;
 grant execute on function public.venta_detalle(text) to authenticated;
+grant execute on function public.caja_resumen(timestamptz, timestamptz, text) to authenticated;
+grant execute on function public.dashboard_recientes(timestamptz, timestamptz, text, integer) to authenticated;
+grant execute on function public.movimientos_caja(timestamptz, timestamptz, text, integer, integer) to authenticated;
+grant execute on function public.ventas_historial_resumen(timestamptz, timestamptz, text, text, text, text) to authenticated;
 
 -- ----------------------------------------------------------------------------
 -- 6) Verificación (opcional)

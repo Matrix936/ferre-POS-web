@@ -1,6 +1,7 @@
 "use client";
 
-import { Box, LinearProgress, MenuItem, TextField } from "@mui/material";
+import { Box, Button, LinearProgress, MenuItem, TextField } from "@mui/material";
+import { FilterAltOffOutlined } from "@mui/icons-material";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
@@ -60,6 +61,8 @@ export default function HistorialFilters({
       router.push(qs ? `/ventas?${qs}` : "/ventas");
     });
   };
+
+  const hasFilters = Boolean(value.sucursal || value.usuario || value.estado || value.folio);
 
   const setField = (field: keyof HistorialFilterValue, v: string) => {
     const next = { ...value, [field]: v };
@@ -134,6 +137,21 @@ export default function HistorialFilters({
         placeholder="Ej: A1B2C3D4"
         sx={{ flex: "1 1 220px", minWidth: { xs: "100%", sm: 220, md: 200 } }}
       />
+      {hasFilters && (
+        <Button
+          size="small"
+          variant="outlined"
+          color="inherit"
+          startIcon={<FilterAltOffOutlined />}
+          onClick={() => {
+            setFolioLocal("");
+            commit({ sucursal: "", usuario: "", estado: "", folio: "" });
+          }}
+          sx={{ alignSelf: "center" }}
+        >
+          Limpiar filtros
+        </Button>
+      )}
     </Box>
 
     {/* Barra fina de carga mientras el servidor re-cote las RPCs del filtro */}

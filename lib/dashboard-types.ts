@@ -166,6 +166,53 @@ export type HistorialVentaDetalle = {
   cantidad_devuelta: number;
 };
 
+export type CajaResumen = {
+  turnos_total: number;
+  turnos_abiertos: number;
+  turnos_cerrados: number;
+  turnos_con_diferencia: number;
+  monto_inicial_centavos: number;
+  ventas_efectivo_centavos: number;
+  ingresos_centavos: number;
+  egresos_centavos: number;
+  monto_esperado_centavos: number;
+  monto_final_real_centavos: number;
+  diferencia_centavos: number;
+};
+
+export type VentaReciente = {
+  id: string;
+  folio: string;
+  fecha: string;
+  total_centavos: number;
+  metodo_pago: string;
+  tipo_origen: string;
+  estado: string;
+  cliente_nombre: string;
+  usuario_nombre: string;
+  sucursal_nombre: string;
+};
+
+export type MovimientoCajaRow = {
+  id: string;
+  fecha: string;
+  tipo: string;
+  monto_centavos: number;
+  motivo: string;
+  afecta_efectivo: boolean;
+  sesion_id: string;
+  sesion_estado: string;
+  usuario_nombre: string;
+  sucursal_nombre: string;
+  total: number;
+};
+
+export type HistorialVentaResumen = {
+  venta_total_centavos: number;
+  tickets: number;
+  ticket_promedio_centavos: number;
+};
+
 // Convierte el array de una `returns table(...)` a su fila única (o null).
 export function fila<T>(data: T[] | T | null): T | null {
   if (Array.isArray(data)) return data.length ? data[0] : null;

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Box, Chip, Tab, TableBody, TableCell, TableRow, Tabs, Typography } from "@mui/material";
 import { AccountBalanceWalletOutlined, ReceiptLongOutlined } from "@mui/icons-material";
 import { deltaPorcentaje, dineroCentavos } from "@/lib/format";
-import type { FinancieroResumen, VentaPorMetodo, AgingRow, CxPAgingRow } from "@/lib/dashboard-types";
+import type { FinancieroResumen, VentaPorMetodo, AgingRow, CxPAgingRow, MovimientoCajaRow } from "@/lib/dashboard-types";
 import { BusinessTable, RowNumberCell } from "@/components/business-table";
 import { TablePager } from "@/components/table-pager";
 import { ExecutiveCard } from "@/components/executive-card";
@@ -40,6 +40,7 @@ export default function FinancieroTabs({
   metodo,
   edadCxC,
   edadCxP,
+  movCaja,
   prevDisponible = false,
 }: {
   resumen: FinancieroResumen;
@@ -47,6 +48,7 @@ export default function FinancieroTabs({
   metodo: VentaPorMetodo[];
   edadCxC: AgingRow[];
   edadCxP: CxPAgingRow[];
+  movCaja: MovimientoCajaRow[];
   prevDisponible?: boolean;
 }) {
   const [tab, setTab] = useState(0);
@@ -80,11 +82,13 @@ export default function FinancieroTabs({
         <Tab label="Resumen" />
         <Tab label="Cuentas por cobrar" />
         <Tab label="Cuentas por pagar" />
+        <Tab label="Movimientos" />
       </Tabs>
 
       {tab === 0 && <ResumenTab resumen={resumen} donutData={donutData} flujoData={flujoData} delta={delta} />}
       {tab === 1 && <AgingCxCTab data={edadCxC} />}
       {tab === 2 && <AgingCxPTab data={edadCxP} />}
+      {tab === 3 && <MovimientosCajaTab data={movCaja} />}
     </>
   );
 }
@@ -248,6 +252,106 @@ function AgingCxCTab({ data }: { data: AgingRow[] }) {
         onNextPage={pager.next}
         onPageSizeChange={pager.setPageSizeAndReset}
         rowLabel="clientes"
+      />
+    </Box>
+  );
+}
+
+function MovimientosCajaTab({ data }: { data: MovimientoCajaRow[] }) {
+  const pager = usePager(data.length);
+  const rows = pager.rows(data);
+
+  return (
+    <Box sx={{ borderRadius: 2, border: "1px solid", borderColor: "divider", overflow: "hidden", bgcolor: "background.paper" }}>
+      <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
+        <Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+            Movimientos de caja
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Ingresos y egresos que afectan el efectivo del periodo.
+          </Typography>
+        </Box>
+        <ExportCsvButton
+          filename="movimientos-caja"
+          rows={data.map((m) => ({
+            Fecha: m.fecha,
+            Tipo: m.tipo,
+            Motivo: m.motivo,
+            Usuario: m.usuario_nombre,
+            Sucursal: m.sucursal_nombre,
+            "Afecta efectivo": m.afecta_efectivo ? "Sí" : "No",
+            Monto: m.monto_centavos,
+          }))}
+        />
+      </Box>
+      <BusinessTable
+        headers={[
+          { label: "Fecha", align: "left" },
+          { label: "Tipo" },
+          { label: "Motivo", align: "left" },
+          { label: "Usuario" },
+          { label: "Sucursal" },
+          { label: "Afecta efectivo" },
+          { label: "Monto", align: "right" },
+        ]}
+        showRowNumber
+        rowNumberPage={pager.page}
+        rowNumberPageSize={pager.pageSize}
+        minWidth={860}
+      >
+        <TableBody>
+          {rows.map((m, index) => (
+            <TableRow key={m.id} hover>
+              <RowNumberCell index={index} />
+              <TableCell align="left">{new Date(m.fecha).toLocaleString("es-MX", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}</TableCell>
+              <TableCell>
+                <Chip
+                  size="small"
+                  label={m.tipo}
+                  color={m.tipo === "INGRESO" ? "success" : "error"}
+                  variant="outlined"
+                  sx={{ borderRadius: "8px", fontWeight: 700 }}
+                />
+              </TableCell>
+              <TableCell align="left">
+                <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                  {m.motivo}
+                </Typography>
+              </TableCell>
+              <TableCell>{m.usuario_nombre}</TableCell>
+              <TableCell>{m.sucursal_nombre}</TableCell>
+              <TableCell>{m.afecta_efectivo ? "Sí" : "No"}</TableCell>
+              <TableCell align="right">
+                <Typography variant="body2" sx={{ fontWeight: 800, color: m.tipo === "INGRESO" ? "success.main" : "error.main" }}>
+                  {m.tipo === "INGRESO" ? "+" : "−"}
+                  {dineroCentavos(m.monto_centavos)}
+                </Typography>
+              </TableCell>
+            </TableRow>
+          ))}
+          {data.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={8} align="center">
+                <EmptyState icon={<AccountBalanceWalletOutlined />} title="Sin movimientos de caja en el periodo." />
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </BusinessTable>
+      <TablePager
+        page={pager.page}
+        pageSize={pager.pageSize}
+        totalPages={pager.totalPages}
+        totalRows={data.length}
+        fromRow={pager.fromRow}
+        toRow={pager.toRow}
+        canPreviousPage={pager.page > 0}
+        canNextPage={pager.page + 1 < pager.totalPages}
+        onPreviousPage={pager.prev}
+        onNextPage={pager.next}
+        onPageSizeChange={pager.setPageSizeAndReset}
+        rowLabel="movimientos"
       />
     </Box>
   );
