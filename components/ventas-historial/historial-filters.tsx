@@ -1,8 +1,8 @@
 "use client";
 
-import { Box, MenuItem, TextField } from "@mui/material";
+import { Box, LinearProgress, MenuItem, TextField } from "@mui/material";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 
 export interface HistorialFilterValue {
@@ -34,6 +34,10 @@ export default function HistorialFilters({
   showUsuario: boolean;
 }) {
   const router = useRouter();
+  // Transición para el feedback de carga (mismo patrón que DateRangePicker):
+  // la navegación de filtros solo cambia query, así que el loading.tsx del
+  // segmento no se activa; la barra fina lo comunica.
+  const [isPending, startTransition] = useTransition();
   // Estado local para edición fluida del folio; la búsqueda real se dispara
   // cuando el valor debounceado cambia (mismo patrón que el escritorio).
   const [folioLocal, setFolioLocal] = useState(value.folio);
@@ -50,7 +54,9 @@ export default function HistorialFilters({
       }
     });
     const qs = params.toString();
-    router.push(qs ? `/ventas?${qs}` : "/ventas");
+    startTransition(() => {
+      router.push(qs ? `/ventas?${qs}` : "/ventas");
+    });
   };
 
   const setField = (field: keyof HistorialFilterValue, v: string) => {
@@ -78,7 +84,8 @@ export default function HistorialFilters({
   }, [value.folio]);
 
   return (
-    <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+    <>
+      <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
       {showSucursal && (
         <TextField
           select
@@ -126,5 +133,21 @@ export default function HistorialFilters({
         sx={{ flex: "1 1 220px", minWidth: { xs: "100%", sm: 220, md: 200 } }}
       />
     </Box>
+
+    {/* Barra fina de carga mientras el servidor re-cote las RPCs del filtro */}
+    {isPending && (
+      <LinearProgress
+        aria-label="Aplicando filtros..."
+        sx={{
+          position: "fixed",
+          top: 56,
+          left: 0,
+          right: 0,
+          zIndex: 1300,
+          height: 3,
+        }}
+      />
+    )}
+  </>
   );
 }
