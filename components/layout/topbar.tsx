@@ -107,7 +107,10 @@ export function Topbar({
           <IconButton onClick={onToggleSidebar} edge="start" aria-label="Alternar menú" color="inherit">
             <MenuIcon />
           </IconButton>
-          <Box sx={{ display: { xs: "none", sm: "flex" }, flexDirection: "column", ml: 1 }}>
+        </Box>
+
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box sx={{ display: { xs: "none", sm: "flex" }, flexDirection: "column", alignItems: "flex-end" }}>
             <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.1 }}>
               {currentDateTime.split(" - ")[0]}
             </Typography>
@@ -115,9 +118,6 @@ export function Topbar({
               {currentDateTime.split(" - ")[1]}
             </Typography>
           </Box>
-        </Box>
-
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
           <ThemeToggle variant="icon" />
 
           <Tooltip title="Opciones de cuenta" enterDelay={200}>
