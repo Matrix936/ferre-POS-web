@@ -463,6 +463,377 @@ as $$
     order by total_centavos desc;
 $$;
 
+-- 4.8 Rentabilidad del período (utilidad = precio pactado − costo pactado)
+--     Réplica de get_indicador_rentabilidad / get_rentabilidad del escritorio.
+create or replace function public.rentabilidad_resumen(
+    p_desde       timestamptz default null,
+    p_hasta       timestamptz default null,
+    p_sucursal_id text        default null
+)
+returns table (
+    venta_total_centavos bigint,
+    costo_total_centavos bigint,
+    utilidad_centavos    bigint,
+    margen_porcentaje    numeric
+)
+language plpgsql
+stable
+security invoker
+set search_path = public
+as $$
+begin
+    return query
+    with agg as (
+        select
+            coalesce(sum(dv.cantidad * dv.precio_venta_pactado_centavos), 0)   as venta,
+            coalesce(sum(dv.cantidad * dv.costo_unitario_pactado_centavos), 0) as costo
+        from public.detalle_ventas dv
+        inner join public.ventas v on v.id = dv.venta_id
+        where v.estado = 'COMPLETADA'
+          and (p_sucursal_id is null or v.sucursal_id = p_sucursal_id)
+          and (p_desde is null or v.fecha >= p_desde)
+          and (p_hasta is null or v.fecha <= p_hasta)
+    )
+    select
+        venta,
+        costo,
+        venta - costo as utilidad,
+        case when venta > 0 then round((venta - costo) * 100.0 / venta, 2) else 0 end as margen
+    from agg;
+end $$;
+
+-- 4.9 Rentabilidad por producto (top N por utilidad) en el período
+create or replace function public.rentabilidad_productos(
+    p_desde       timestamptz default null,
+    p_hasta       timestamptz default null,
+    p_sucursal_id text        default null,
+    p_limite      integer     default 50
+)
+returns table (
+    producto_id       text,
+    codigo_proveedor  text,
+    descripcion       text,
+    marca             text,
+    unidades_vendidas numeric,
+    venta_centavos    bigint,
+    costo_centavos    bigint,
+    utilidad_centavos bigint,
+    margen_porcentaje numeric
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+    select
+        p.id,
+        coalesce(p.codigo_proveedor, ''),
+        p.descripcion,
+        coalesce(m.nombre, ''),
+        coalesce(sum(dv.cantidad), 0) as unidades,
+        coalesce(sum(dv.cantidad * dv.precio_venta_pactado_centavos), 0)   as venta,
+        coalesce(sum(dv.cantidad * dv.costo_unitario_pactado_centavos), 0) as costo,
+        coalesce(
+            sum(dv.cantidad * dv.precio_venta_pactado_centavos)
+          - sum(dv.cantidad * dv.costo_unitario_pactado_centavos), 0
+        ) as utilidad,
+        case
+            when sum(dv.cantidad * dv.precio_venta_pactado_centavos) > 0
+            then round(
+                (sum(dv.cantidad * dv.precio_venta_pactado_centavos)
+                 - sum(dv.cantidad * dv.costo_unitario_pactado_centavos))
+                * 100.0
+                / sum(dv.cantidad * dv.precio_venta_pactado_centavos), 2
+            )
+            else 0
+        end as margen
+    from public.detalle_ventas dv
+    inner join public.ventas v    on v.id = dv.venta_id
+    inner join public.productos p on p.id = dv.producto_id
+    left join public.marcas m     on m.id = p.marca_id
+    where v.estado = 'COMPLETADA'
+      and (p_sucursal_id is null or v.sucursal_id = p_sucursal_id)
+      and (p_desde is null or v.fecha >= p_desde)
+      and (p_hasta is null or v.fecha <= p_hasta)
+    group by p.id, p.codigo_proveedor, p.descripcion, p.marca_id, m.nombre
+    order by utilidad desc
+    limit greatest(p_limite, 0);
+$$;
+
+-- 4.10 Resumen financiero: caja, ventas por método, compras, CxC, CxP y flujo.
+--      Réplica de get_indicador_financiero (5 SETs) del escritorio.
+create or replace function public.financiero_resumen(
+    p_desde       timestamptz default null,
+    p_hasta       timestamptz default null,
+    p_sucursal_id text        default null
+)
+returns table (
+    ingresos_caja_centavos       bigint,
+    egresos_caja_centavos        bigint,
+    ventas_efectivo_centavos     bigint,
+    ventas_tarjeta_centavos      bigint,
+    ventas_transferencia_centavos bigint,
+    ventas_credito_centavos      bigint,
+    compras_centavos             bigint,
+    cuentas_por_cobrar_centavos  bigint,
+    cuentas_por_pagar_centavos   bigint,
+    flujo_neto_estimado_centavos bigint
+)
+language plpgsql
+stable
+security invoker
+set search_path = public
+as $$
+declare
+    v_ingresos     bigint;
+    v_egresos      bigint;
+    v_efectivo     bigint;
+    v_tarjeta      bigint;
+    v_transferencia bigint;
+    v_credito      bigint;
+    v_compras      bigint;
+    v_cxc          bigint;
+    v_cxp          bigint;
+begin
+    -- Caja: movimientos que afectan efectivo, cortados por updated_at.
+    select
+        coalesce(sum(case when cm.tipo = 'INGRESO' and coalesce(cm.afecta_efectivo, true) then cm.monto_centavos else 0 end), 0),
+        coalesce(sum(case when cm.tipo = 'EGRESO'  and coalesce(cm.afecta_efectivo, true) then cm.monto_centavos else 0 end), 0)
+      into v_ingresos, v_egresos
+    from public.caja_movimientos cm
+    inner join public.cajas_sesiones cs on cs.id = cm.sesion_id
+    where (p_sucursal_id is null or cs.sucursal_id = p_sucursal_id)
+      and (p_desde is null or cm.updated_at >= p_desde)
+      and (p_hasta is null or cm.updated_at <= p_hasta);
+
+    -- Ventas por método de pago (COMPLETADAS) en el rango.
+    select
+        coalesce(sum(total_centavos) filter (where metodo_pago = 'EFECTIVO'), 0),
+        coalesce(sum(total_centavos) filter (where metodo_pago = 'TARJETA'), 0),
+        coalesce(sum(total_centavos) filter (where metodo_pago = 'TRANSFERENCIA'), 0),
+        coalesce(sum(total_centavos) filter (where metodo_pago = 'CREDITO'), 0)
+      into v_efectivo, v_tarjeta, v_transferencia, v_credito
+    from public.ventas v
+    where v.estado = 'COMPLETADA'
+      and (p_sucursal_id is null or v.sucursal_id = p_sucursal_id)
+      and (p_desde is null or v.fecha >= p_desde)
+      and (p_hasta is null or v.fecha <= p_hasta);
+
+    -- Compras del período (excluye cotizaciones).
+    select coalesce(sum(total_centavos), 0)
+      into v_compras
+    from public.compras c
+    where c.estado_pago <> 'COTIZACION'
+      and (p_sucursal_id is null or c.sucursal_id = p_sucursal_id)
+      and (p_desde is null or c.fecha >= p_desde)
+      and (p_hasta is null or c.fecha <= p_hasta);
+
+    -- Cuentas por cobrar: saldo deudor acumulado.
+    select coalesce(round(sum(c.saldo_deudor * 100)), 0)::bigint
+      into v_cxc
+    from public.clientes c
+    where c.eliminado = false;
+
+    -- Cuentas por pagar: compras pendientes.
+    select coalesce(sum(total_centavos), 0)
+      into v_cxp
+    from public.compras c
+    where c.estado_pago = 'PENDIENTE'
+      and (p_sucursal_id is null or c.sucursal_id = p_sucursal_id);
+
+    return query
+    select
+        v_ingresos,
+        v_egresos,
+        v_efectivo,
+        v_tarjeta,
+        v_transferencia,
+        v_credito,
+        v_compras,
+        v_cxc,
+        v_cxp,
+        (v_efectivo + v_tarjeta + v_transferencia + v_ingresos - v_egresos - v_compras) as flujo_neto_estimado_centavos;
+end $$;
+
+-- 4.11 Cuentas por cobrar — aging (réplica get_ar_aging del escritorio).
+--      Buckets: Vigente (sin vencer), 1-30, 31-60 y 60+ días de atraso.
+create or replace function public.cuentas_por_cobrar_aging(
+    p_sucursal_id text default null
+)
+returns table (
+    cliente_id          text,
+    cliente_nombre      text,
+    total_deuda_centavos    bigint,
+    deuda_vigente_centavos  bigint,
+    deuda_1_30_centavos     bigint,
+    deuda_31_60_centavos    bigint,
+    deuda_60_mas_centavos   bigint,
+    limite_credito_centavos bigint,
+    uso_credito_porcentaje  numeric
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+    select
+        c.id,
+        c.nombre,
+        coalesce(sum(v.total_centavos), 0) as total_deuda,
+        coalesce(sum(case
+            when v.fecha_vencimiento is null or v.fecha_vencimiento >= now()
+            then v.total_centavos else 0 end), 0) as deuda_vigente,
+        coalesce(sum(case
+            when v.fecha_vencimiento < now() and v.fecha_vencimiento >= now() - interval '30 days'
+            then v.total_centavos else 0 end), 0) as deuda_1_30,
+        coalesce(sum(case
+            when v.fecha_vencimiento < now() - interval '30 days' and v.fecha_vencimiento >= now() - interval '60 days'
+            then v.total_centavos else 0 end), 0) as deuda_31_60,
+        coalesce(sum(case
+            when v.fecha_vencimiento < now() - interval '60 days'
+            then v.total_centavos else 0 end), 0) as deuda_60_mas,
+        coalesce(round(c.limite_credito * 100), 0)::bigint as limite_credito,
+        case
+            when coalesce(c.limite_credito, 0) > 0
+            then round(
+                (coalesce(sum(v.total_centavos), 0) / (c.limite_credito * 100)) * 100, 1
+            )
+            else 100
+        end as uso_credito
+    from public.clientes c
+    inner join public.ventas v on v.cliente_id = c.id
+    where v.estado = 'COMPLETADA'
+      and v.metodo_pago = 'CREDITO'
+      and c.eliminado = false
+      and c.saldo_deudor > 0
+      and (p_sucursal_id is null or v.sucursal_id = p_sucursal_id)
+    group by c.id, c.nombre, c.limite_credito
+    order by total_deuda desc;
+$$;
+
+-- 4.12 Cuentas por pagar — aging (réplica get_cxp_aging del escritorio).
+create or replace function public.cuentas_por_pagar_aging(
+    p_sucursal_id text default null
+)
+returns table (
+    proveedor_id         text,
+    proveedor_nombre     text,
+    total_deuda_centavos     bigint,
+    deuda_vigente_centavos   bigint,
+    deuda_1_30_centavos      bigint,
+    deuda_31_60_centavos     bigint,
+    deuda_60_mas_centavos    bigint,
+    compras_pendientes       bigint
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+    select
+        pr.id,
+        pr.nombre,
+        coalesce(sum(c.total_centavos), 0) as total_deuda,
+        coalesce(sum(case
+            when c.fecha_vencimiento is null or c.fecha_vencimiento >= now()
+            then c.total_centavos else 0 end), 0) as deuda_vigente,
+        coalesce(sum(case
+            when c.fecha_vencimiento < now() and c.fecha_vencimiento >= now() - interval '30 days'
+            then c.total_centavos else 0 end), 0) as deuda_1_30,
+        coalesce(sum(case
+            when c.fecha_vencimiento < now() - interval '30 days' and c.fecha_vencimiento >= now() - interval '60 days'
+            then c.total_centavos else 0 end), 0) as deuda_31_60,
+        coalesce(sum(case
+            when c.fecha_vencimiento < now() - interval '60 days'
+            then c.total_centavos else 0 end), 0) as deuda_60_mas,
+        count(distinct c.id) as compras_pendientes
+    from public.proveedores pr
+    inner join public.compras c on c.proveedor_id = pr.id
+    where c.estado_pago = 'PENDIENTE'
+      and pr.eliminado = false
+      and (p_sucursal_id is null or c.sucursal_id = p_sucursal_id)
+    group by pr.id, pr.nombre
+    order by total_deuda desc;
+$$;
+
+-- 4.13 Cortes de caja / turnos (réplica get_turnos_page del escritorio).
+create or replace function public.turnos_resumen(
+    p_desde       timestamptz default null,
+    p_hasta       timestamptz default null,
+    p_sucursal_id text        default null,
+    p_limite      integer     default 100
+)
+returns table (
+    sesion_id                  text,
+    usuario_nombre             text,
+    sucursal_id                text,
+    sucursal_nombre            text,
+    fecha_apertura             timestamptz,
+    fecha_cierre               timestamptz,
+    monto_inicial_centavos     bigint,
+    ventas_efectivo_centavos   bigint,
+    ingresos_centavos          bigint,
+    egresos_centavos           bigint,
+    monto_esperado_centavos    bigint,
+    monto_final_real_centavos  bigint,
+    diferencia_centavos        bigint,
+    estado                     text
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+    select
+        cs.id,
+        coalesce(u.nombre, ''),
+        cs.sucursal_id,
+        coalesce(s.nombre, ''),
+        cs.fecha_apertura,
+        cs.fecha_cierre,
+        cs.monto_inicial_centavos,
+        coalesce((
+            select sum(v.total_centavos)
+            from public.ventas v
+            where v.usuario_id = cs.usuario_id
+              and v.sucursal_id = cs.sucursal_id
+              and v.metodo_pago = 'EFECTIVO'
+              and v.estado = 'COMPLETADA'
+              and v.fecha >= cs.fecha_apertura
+              and (cs.fecha_cierre is null or v.fecha <= cs.fecha_cierre)
+        ), 0) as ventas_efectivo,
+        coalesce((
+            select sum(cm.monto_centavos)
+            from public.caja_movimientos cm
+            where cm.sesion_id = cs.id
+              and cm.tipo = 'INGRESO'
+              and coalesce(cm.afecta_efectivo, true)
+        ), 0) as ingresos,
+        coalesce((
+            select sum(cm.monto_centavos)
+            from public.caja_movimientos cm
+            where cm.sesion_id = cs.id
+              and cm.tipo = 'EGRESO'
+              and coalesce(cm.afecta_efectivo, true)
+        ), 0) as egresos,
+        cs.monto_esperado_centavos,
+        cs.monto_final_real_centavos,
+        case
+            when cs.monto_final_real_centavos is not null
+            then cs.monto_final_real_centavos - cs.monto_esperado_centavos
+            else null
+        end as diferencia,
+        cs.estado
+    from public.cajas_sesiones cs
+    inner join public.usuarios u on u.id = cs.usuario_id
+    inner join public.sucursales s on s.id = cs.sucursal_id
+    where (p_sucursal_id is null or cs.sucursal_id = p_sucursal_id)
+      and (p_desde is null or cs.fecha_apertura >= p_desde)
+      and (p_hasta is null or cs.fecha_apertura <= p_hasta)
+    order by cs.fecha_apertura desc
+    limit greatest(p_limite, 0);
+$$;
+
 -- ----------------------------------------------------------------------------
 -- 5) Conceder a `authenticated` la ejecución de las funciones read-only.
 --    (Después del revoke global del paso 1.)
@@ -474,6 +845,12 @@ grant execute on function public.inventario_resumen(text) to authenticated;
 grant execute on function public.inventario_bajo_stock(text, integer) to authenticated;
 grant execute on function public.ventas_por_dia(date, date, text) to authenticated;
 grant execute on function public.ventas_por_sucursal(date, date) to authenticated;
+grant execute on function public.rentabilidad_resumen(timestamptz, timestamptz, text) to authenticated;
+grant execute on function public.rentabilidad_productos(timestamptz, timestamptz, text, integer) to authenticated;
+grant execute on function public.financiero_resumen(timestamptz, timestamptz, text) to authenticated;
+grant execute on function public.cuentas_por_cobrar_aging(text) to authenticated;
+grant execute on function public.cuentas_por_pagar_aging(text) to authenticated;
+grant execute on function public.turnos_resumen(timestamptz, timestamptz, text, integer) to authenticated;
 
 -- ----------------------------------------------------------------------------
 -- 6) Verificación (opcional)

@@ -59,3 +59,23 @@ export function rangoAFechas(r: Rango, ahora = new Date()): { desde: Date | null
 export function toFechaISO(d: Date | null): string {
   return d ? mexicoClave(d) : "";
 }
+
+// Periodo inmediatamente anterior a [desde, hasta) con la misma duración.
+// Útil para calcular el % de cambio vs el periodo previo.
+export function periodoAnterior(desde: Date | null, hasta: Date | null): {
+  desde: Date | null;
+  hasta: Date | null;
+} {
+  if (!desde || !hasta) return { desde: null, hasta: null };
+  const duracion = hasta.getTime() - desde.getTime();
+  return {
+    desde: new Date(desde.getTime() - duracion),
+    hasta: desde,
+  };
+}
+
+// % de cambio entre un valor anterior (base) y el actual. null si no hay base.
+export function deltaPorcentaje(actual: number, anterior: number): number | null {
+  if (!anterior) return null;
+  return ((actual - anterior) / anterior) * 100;
+}

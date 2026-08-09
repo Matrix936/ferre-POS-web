@@ -1,7 +1,7 @@
 import { Box, Chip, Paper, Typography } from "@mui/material";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { RANGOS, rangoAFechas, dineroCentavos, cantidad, type Rango } from "@/lib/format";
+import { RANGOS, rangoAFechas, periodoAnterior, deltaPorcentaje, dineroCentavos, cantidad, type Rango } from "@/lib/format";
 import {
   fila,
   type IndicadorVentas,
@@ -11,6 +11,7 @@ import {
   type ProductoBajoStock,
   type VentaPorDia,
   type VentaPorSucursal,
+  type RentabilidadResumen,
 } from "@/lib/dashboard-types";
 import DateRangePicker from "@/components/date-range-picker";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
@@ -47,8 +48,10 @@ export default async function DashboardPage({ searchParams }: Props) {
 
   const rpcOpts = { p_sucursal_id };
   const iso = { p_desde: desde, p_hasta: hasta };
+  const prev = periodoAnterior(desde, hasta);
+  const prevIso = { p_desde: prev.desde, p_hasta: prev.hasta };
 
-  const [{ data: dVentas }, { data: dMetodo }, { data: dTop }, { data: dInv }, { data: dBajo }, { data: dDia }, { data: dSuc }] =
+  const [{ data: dVentas }, { data: dMetodo }, { data: dTop }, { data: dInv }, { data: dBajo }, { data: dDia }, { data: dSuc }, { data: dRent }, { data: dVentasPrev }, { data: dRentPrev }] =
     await Promise.all([
       supabase.rpc("indicador_ventas", { ...iso, ...rpcOpts, p_metodo_pago: null }),
       supabase.rpc("ventas_por_metodo", { ...iso, p_sucursal_id }),
@@ -57,6 +60,9 @@ export default async function DashboardPage({ searchParams }: Props) {
       supabase.rpc("inventario_bajo_stock", { p_sucursal_id, p_limite: 50 }),
       supabase.rpc("ventas_por_dia", { ...iso, p_sucursal_id }),
       supabase.rpc("ventas_por_sucursal", iso),
+      supabase.rpc("rentabilidad_resumen", { ...iso, ...rpcOpts }),
+      supabase.rpc("indicador_ventas", { ...prevIso, ...rpcOpts, p_metodo_pago: null }),
+      supabase.rpc("rentabilidad_resumen", { ...prevIso, ...rpcOpts }),
     ]);
 
   const ind = fila<IndicadorVentas>(dVentas);
@@ -66,6 +72,9 @@ export default async function DashboardPage({ searchParams }: Props) {
   const bajo = (Array.isArray(dBajo) ? dBajo : []) as ProductoBajoStock[];
   const porDia = (Array.isArray(dDia) ? dDia : []) as VentaPorDia[];
   const porSuc = (Array.isArray(dSuc) ? dSuc : []) as VentaPorSucursal[];
+  const rent = fila<RentabilidadResumen>(dRent);
+  const indPrev = fila<IndicadorVentas>(dVentasPrev);
+  const rentPrev = fila<RentabilidadResumen>(dRentPrev);
 
   const donutData = metodo.map((m) => ({
     label: (m.metodo_pago?.[0]?.toUpperCase() ?? "") + (m.metodo_pago?.slice(1) ?? ""),
@@ -83,6 +92,11 @@ export default async function DashboardPage({ searchParams }: Props) {
   const stockBajo = Number(inv?.stock_bajo ?? bajo.length);
   const sinStock = Number(inv?.sin_stock ?? 0);
   const sobreStock = Number(inv?.sobre_stock ?? 0);
+
+  const utilidad = Number(rent?.utilidad_centavos ?? 0);
+  const margen = Number(rent?.margen_porcentaje ?? 0);
+  const deltaVentas = deltaPorcentaje(totalVendido, Number(indPrev?.total_vendido_centavos ?? 0));
+  const deltaUtilidad = deltaPorcentaje(utilidad, Number(rentPrev?.utilidad_centavos ?? 0));
 
   return (
     <DashboardLayout
@@ -103,7 +117,8 @@ export default async function DashboardPage({ searchParams }: Props) {
         </Box>
 
         <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", xl: "repeat(4, 1fr)" }, mb: 2 }}>
-          <ExecutiveCard label="Ventas" value={dineroCentavos(totalVendido)} helper={ind ? `${cantidad(transacciones)} tickets` : undefined} />
+          <ExecutiveCard label="Ventas" value={dineroCentavos(totalVendido)} delta={deltaVentas} helper={ind ? `${cantidad(transacciones)} tickets` : undefined} />
+          <ExecutiveCard label="Utilidad neta" value={dineroCentavos(utilidad)} delta={deltaUtilidad} helper={`Margen ${margen.toLocaleString("es-MX", { maximumFractionDigits: 1 })}%`} />
           <ExecutiveCard label="Ticket promedio" value={dineroCentavos(ticketPromedio)} helper="Venta promedio por ticket" />
           <ExecutiveCard label="Ventas canceladas" value={cantidad(ventasCanceladas)} helper="Operaciones canceladas" />
           <ExecutiveCard label="Crédito" value={dineroCentavos(credito)} helper="Crédito pendiente" />
