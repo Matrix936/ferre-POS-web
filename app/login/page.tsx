@@ -1,14 +1,8 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { Box, Container, Paper, Typography } from "@mui/material";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import {
-  pageSx,
-  cardSx,
-  logoWrapSx,
-  logoSx,
-  taglineSx,
-} from "@/lib/tokens";
 import LoginForm from "@/components/login-form";
 
 export const metadata: Metadata = { title: "Acceso · Ferre Dashboard" };
@@ -24,22 +18,56 @@ export default async function LoginPage() {
   }
 
   return (
-    <main style={pageSx}>
-      <div style={cardSx}>
-        <div style={logoWrapSx}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+    <Box
+      sx={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        bgcolor: "background.default",
+      }}
+    >
+      <Container component="main" maxWidth="xs">
+        <Paper
+          elevation={0}
+          sx={{
+            p: { xs: 4, sm: 5 },
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            width: "100%",
+            borderRadius: 2,
+            border: "1px solid",
+            borderColor: "divider",
+            bgcolor: "background.paper",
+          }}
+        >
+          <Box
+            component="img"
             src="/logo.png"
             alt="Ferre-POS"
-            style={logoSx}
             className="fsp-logo-spin"
+            sx={{
+              width: "auto",
+              maxWidth: "100%",
+              maxHeight: 128,
+              height: "auto",
+              objectFit: "contain",
+              mb: 2,
+            }}
           />
-        </div>
-        <h1 style={taglineSx}>Gestión de Inventario y Ventas</h1>
-        <Suspense>
-          <LoginForm />
-        </Suspense>
-      </div>
-    </main>
+          <Typography
+            component="h2"
+            variant="body1"
+            sx={{ color: "text.secondary", mb: 4 }}
+          >
+            Gestión de Inventario y Ventas
+          </Typography>
+          <Suspense>
+            <LoginForm />
+          </Suspense>
+        </Paper>
+      </Container>
+    </Box>
   );
 }
