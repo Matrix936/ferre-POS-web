@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Box, Drawer, useMediaQuery, useTheme } from "@mui/material";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
+import { TopbarHeightProvider } from "./topbar-height-context";
 
 // Port de ferre-pos/src/layout/components/DashboardLayout.tsx (solo UI).
 // Responsive: < md el sidebar es un Drawer temporal (overlay) que se abre con
@@ -30,6 +31,20 @@ export function DashboardLayout({
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [collapsed, setCollapsed] = useState(() => !leerSidebarOpen());
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [topbarHeight, setTopbarHeight] = useState<number | null>(null);
+  const topbarRef = useRef<HTMLDivElement | null>(null);
+
+  // Mide la altura real del AppBar para que las barras de carga (rango de
+  // fechas, filtros) aterricen exactamente sobre su borde inferior.
+  useEffect(() => {
+    const node = topbarRef.current;
+    if (!node) return;
+    const update = () => setTopbarHeight(node.offsetHeight);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   const toggleSidebar = () => {
     if (isMobile) {
@@ -106,10 +121,14 @@ export function DashboardLayout({
       </Drawer>
 
       <Box sx={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        <Topbar onToggleSidebar={toggleSidebar} user={user} />
-        <Box component="main" sx={{ flex: 1, overflowX: "hidden", overflowY: "auto" }}>
-          <Box sx={{ width: "100%", minHeight: "100%", p: { xs: 2, md: 3 } }}>{children}</Box>
-        </Box>
+        <TopbarHeightProvider value={topbarHeight}>
+          <Box ref={topbarRef}>
+            <Topbar onToggleSidebar={toggleSidebar} user={user} />
+          </Box>
+          <Box component="main" sx={{ flex: 1, overflowX: "hidden", overflowY: "auto" }}>
+            <Box sx={{ width: "100%", minHeight: "100%", p: { xs: 2, md: 3 } }}>{children}</Box>
+          </Box>
+        </TopbarHeightProvider>
       </Box>
     </Box>
   );

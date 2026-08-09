@@ -4,6 +4,7 @@ import { Box, LinearProgress, MenuItem, TextField } from "@mui/material";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { useTopbarHeight } from "@/components/layout/topbar-height-context";
 
 export interface HistorialFilterValue {
   sucursal: string;
@@ -38,6 +39,7 @@ export default function HistorialFilters({
   // la navegación de filtros solo cambia query, así que el loading.tsx del
   // segmento no se activa; la barra fina lo comunica.
   const [isPending, startTransition] = useTransition();
+  const topbarHeight = useTopbarHeight() ?? 56;
   // Estado local para edición fluida del folio; la búsqueda real se dispara
   // cuando el valor debounceado cambia (mismo patrón que el escritorio).
   const [folioLocal, setFolioLocal] = useState(value.folio);
@@ -140,7 +142,7 @@ export default function HistorialFilters({
         aria-label="Aplicando filtros..."
         sx={{
           position: "fixed",
-          top: 56,
+          top: topbarHeight,
           left: 0,
           right: 0,
           zIndex: 1300,
