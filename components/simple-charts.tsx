@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Paper, Stack, Typography, alpha, useTheme } from "@mui/material";
+import { Box, Paper, Stack, Typography, alpha, useMediaQuery, useTheme } from "@mui/material";
 import { useEffect, useState, type ReactNode } from "react";
 import { dineroCentavos } from "@/lib/format";
 import {
@@ -38,34 +38,37 @@ const chartColors = ["#2563EB", "#16A34A", "#F59E0B", "#7C3AED", "#EF4444", "#08
 
 export function SimpleBarChart({ title, subtitle, data, format = "number", height = 260 }: ChartProps) {
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
-  const cleanData = data.filter((item) => Number(item.value || 0) > 0).slice(0, 8);
-  const chartData = cleanData.map((item, index) => ({
-    ...item,
-    color: item.color ?? chartColors[index % chartColors.length],
-    shortLabel: shortenLabel(item.label),
-  }));
+  const cleanData = data
+    .filter((item) => Number(item.value || 0) > 0)
+    .slice(0, isMobile ? 6 : 8)
+    .map((item, index) => ({
+      ...item,
+      color: item.color ?? chartColors[index % chartColors.length],
+      shortLabel: shortenLabel(item.label, isMobile ? 14 : 18),
+    }));
 
   return (
     <ChartCard title={title} subtitle={subtitle}>
-      {chartData.length === 0 ? (
+      {cleanData.length === 0 ? (
         <EmptyChart height={height} />
       ) : !mounted ? (
         <Box sx={{ height }} />
       ) : (
-        <Box sx={{ height }}>
+        <Box sx={{ height: isMobile ? Math.min(height, 210) : height }}>
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-            <BarChart data={chartData} layout="vertical" margin={{ top: 6, right: 14, left: 0, bottom: 2 }} barCategoryGap={12}>
+            <BarChart data={cleanData} layout="vertical" margin={{ top: 6, right: 10, left: isMobile ? -8 : 0, bottom: 2 }} barCategoryGap={isMobile ? 8 : 12}>
               <CartesianGrid horizontal={false} stroke={alpha(theme.palette.text.primary, 0.08)} />
               <XAxis type="number" hide />
               <YAxis
                 type="category"
                 dataKey="shortLabel"
-                width={118}
+                width={isMobile ? 92 : 118}
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: theme.palette.text.secondary, fontSize: 12, fontWeight: 600 }}
+                tick={{ fill: theme.palette.text.secondary, fontSize: isMobile ? 10 : 12, fontWeight: 600 }}
               />
               <Tooltip
                 cursor={{ fill: alpha(theme.palette.primary.main, 0.06) }}
@@ -75,8 +78,8 @@ export function SimpleBarChart({ title, subtitle, data, format = "number", heigh
                   return <ChartTooltip label={item.label} value={fmt(item.value, format)} />;
                 }}
               />
-              <Bar dataKey="value" radius={[0, 8, 8, 0]} maxBarSize={16}>
-                {chartData.map((item) => (
+              <Bar dataKey="value" radius={[0, 8, 8, 0]} maxBarSize={isMobile ? 12 : 16}>
+                {cleanData.map((item) => (
                   <Cell key={item.label} fill={item.color} />
                 ))}
               </Bar>
@@ -90,6 +93,7 @@ export function SimpleBarChart({ title, subtitle, data, format = "number", heigh
 
 export function SimpleDonutChart({ title, subtitle, data, format = "currency", height = 260 }: ChartProps) {
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   const cleanData = data
@@ -104,16 +108,16 @@ export function SimpleDonutChart({ title, subtitle, data, format = "currency", h
       ) : !mounted ? (
         <Box sx={{ minHeight: height }} />
       ) : (
-        <Box sx={{ minHeight: height, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "170px 1fr" }, gap: 2, alignItems: "center" }}>
-          <Box sx={{ height: 170, position: "relative" }}>
+        <Box sx={{ minHeight: isMobile ? Math.min(height, 210) : height, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "170px 1fr" }, gap: isMobile ? 1.5 : 2, alignItems: "center" }}>
+          <Box sx={{ height: isMobile ? 150 : 170, position: "relative" }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
                 <Pie
                   data={cleanData}
                   dataKey="value"
                   nameKey="label"
-                  innerRadius={54}
-                  outerRadius={76}
+                  innerRadius={isMobile ? 48 : 54}
+                  outerRadius={isMobile ? 68 : 76}
                   paddingAngle={2}
                   stroke={theme.palette.background.paper}
                   strokeWidth={3}
@@ -126,7 +130,7 @@ export function SimpleDonutChart({ title, subtitle, data, format = "currency", h
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const item = payload[0].payload as ChartDatum;
-return <ChartTooltip label={item.label} value={fmt(item.value, format)} />;
+                    return <ChartTooltip label={item.label} value={fmt(item.value, format)} />;
                   }}
                 />
               </PieChart>
@@ -146,13 +150,13 @@ return <ChartTooltip label={item.label} value={fmt(item.value, format)} />;
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>
                   Total
                 </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 900 }}>
+                <Typography variant={isMobile ? "body2" : "body1"} sx={{ fontWeight: 900 }}>
                   {fmt(total, format)}
                 </Typography>
               </Box>
             </Box>
           </Box>
-          <Stack spacing={1}>
+          <Stack spacing={isMobile ? 0.75 : 1}>
             {cleanData.map((item) => {
               const pct = total > 0 ? (item.value / total) * 100 : 0;
               return (
@@ -161,8 +165,8 @@ return <ChartTooltip label={item.label} value={fmt(item.value, format)} />;
                   <Typography variant="body2" sx={{ flex: 1, fontWeight: 700 }} noWrap>
                     {item.label}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>
-                    {pct.toFixed(0)}%
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, whiteSpace: "nowrap" }}>
+                    {fmt(item.value, format)} · {pct.toFixed(0)}%
                   </Typography>
                 </Box>
               );
@@ -175,8 +179,10 @@ return <ChartTooltip label={item.label} value={fmt(item.value, format)} />;
 }
 
 export function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   return (
-    <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: "1px solid", borderColor: "divider", height: "100%" }}>
+    <Paper elevation={0} sx={{ p: isMobile ? 1.5 : 2, borderRadius: 2, border: "1px solid", borderColor: "divider", height: "100%" }}>
       <Box sx={{ mb: 1.5 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 900 }}>
           {title}
@@ -215,8 +221,8 @@ function EmptyChart({ height }: { height: number }) {
   );
 }
 
-function shortenLabel(label: string) {
+function shortenLabel(label: string, largo = 18) {
   const clean = label.trim();
-  if (clean.length <= 18) return clean;
-  return `${clean.slice(0, 17)}…`;
+  if (clean.length <= largo) return clean;
+  return `${clean.slice(0, largo - 1)}…`;
 }

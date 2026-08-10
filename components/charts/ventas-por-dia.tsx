@@ -1,6 +1,7 @@
 "use client";
 
 import { Area, Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useMediaQuery, useTheme } from "@mui/material";
 import { ChartCard } from "@/components/simple-charts";
 
 type Row = {
@@ -19,6 +20,8 @@ const fmtSuc = (data: Row[]): Row[] =>
 const money = (v: number) => `$${(v / 100).toLocaleString("es-MX", { maximumFractionDigits: 2 })}`;
 
 export default function VentasPorDiaChart({ data, prev = [] }: { data: Row[]; prev?: Row[] }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const rows = fmtSuc(data);
   const prevRows = fmtSuc(prev);
   const hasPrev = prevRows.length > 0;
@@ -29,13 +32,13 @@ export default function VentasPorDiaChart({ data, prev = [] }: { data: Row[]; pr
   }));
 
   return (
-    <ChartCard title="Ventas por día" subtitle={hasPrev ? "Periodo actual vs anterior" : "Total y transacciones del periodo"}>
+    <ChartCard title="Ventas por día" subtitle={hasPrev ? "Periodo actual vs anterior" : isMobile ? "Total del periodo (dinero)" : "Total y transacciones del periodo"}>
       {!rows.length ? (
         <p style={{ color: "#9ca3af" }}>Sin ventas en el rango.</p>
       ) : (
-        <div style={{ width: "100%", height: 260 }}>
+        <div style={{ width: "100%", height: isMobile ? 230 : 260 }}>
           <ResponsiveContainer>
-            <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <ComposedChart data={chartData} margin={{ top: 6, right: isMobile ? 4 : 10, left: isMobile ? -8 : 0, bottom: isMobile ? 2 : 0 }}>
               <defs>
                 <linearGradient id="ventTotal" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#2563EB" stopOpacity={0.5} />
@@ -43,9 +46,22 @@ export default function VentasPorDiaChart({ data, prev = [] }: { data: Row[]; pr
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.08)" />
-              <XAxis dataKey="fecha" tick={{ fontSize: 11 }} tickFormatter={(v) => v?.slice(5)} />
-              <YAxis yAxisId="izq" tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${Math.round(v / 100)}`} width={70} />
-              <YAxis yAxisId="der" orientation="right" tick={{ fontSize: 11 }} tickFormatter={(v) => String(v)} width={30} />
+              <XAxis
+                dataKey="fecha"
+                tick={{ fontSize: isMobile ? 9 : 11 }}
+                tickFormatter={(v) => v?.slice(5)}
+                interval="preserveStartEnd"
+                minTickGap={isMobile ? 22 : 28}
+              />
+              <YAxis
+                yAxisId="izq"
+                tick={{ fontSize: isMobile ? 9 : 11 }}
+                tickFormatter={(v: number) => `$${Math.round(v / 100)}`}
+                width={isMobile ? 48 : 70}
+              />
+              {!isMobile && (
+                <YAxis yAxisId="der" orientation="right" tick={{ fontSize: 11 }} tickFormatter={(v) => String(v)} width={30} />
+              )}
               <Tooltip
                 formatter={(value, name) => {
                   if (name === "total_centavos") return [money(Number(value)), "Total"];
@@ -54,6 +70,8 @@ export default function VentasPorDiaChart({ data, prev = [] }: { data: Row[]; pr
                 }}
               />
               <Legend
+                verticalAlign={isMobile ? "bottom" : "top"}
+                wrapperStyle={isMobile ? { fontSize: 11, paddingTop: 6 } : undefined}
                 formatter={(v: string) =>
                   v === "total_centavos" ? "Total ($)" : v === "prev_centavos" ? "Periodo anterior" : "Transacciones"
                 }
@@ -72,7 +90,9 @@ export default function VentasPorDiaChart({ data, prev = [] }: { data: Row[]; pr
                   name="prev_centavos"
                 />
               )}
-              <Bar yAxisId="der" dataKey="transacciones" fill="#93c5fd" name="transacciones" radius={[3, 3, 0, 0]} barSize={12} opacity={0.7} />
+              {!isMobile && (
+                <Bar yAxisId="der" dataKey="transacciones" fill="#93c5fd" name="transacciones" radius={[3, 3, 0, 0]} barSize={12} opacity={0.7} />
+              )}
             </ComposedChart>
           </ResponsiveContainer>
         </div>
