@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Box, Chip, TableBody, TableCell, TableRow, Typography } from "@mui/material";
-import { StorefrontOutlined } from "@mui/icons-material";
+import { useMemo, useState } from "react";
+import { Box, Chip, InputAdornment, TableBody, TableCell, TableRow, TextField, Typography } from "@mui/material";
+import { Search, StorefrontOutlined } from "@mui/icons-material";
 import { dineroCentavos } from "@/lib/format";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import type { TurnoResumen } from "@/lib/dashboard-types";
 import { BusinessTable, RowNumberCell } from "@/components/business-table";
 import { TablePager } from "@/components/table-pager";
@@ -32,12 +33,25 @@ function fechaLocal(iso: string | null): string {
 export default function TurnosTable({ data }: { data: TurnoResumen[] }) {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 250);
 
-  const totalRows = data.length;
+  const filtered = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    if (!q) return data;
+    return data.filter(
+      (t) =>
+        (t.usuario_nombre ?? "").toLowerCase().includes(q) ||
+        (t.sucursal_nombre ?? "").toLowerCase().includes(q) ||
+        (t.estado ?? "").toLowerCase().includes(q),
+    );
+  }, [data, debouncedSearch]);
+
+  const totalRows = filtered.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const fromRow = totalRows === 0 ? 0 : page * pageSize + 1;
   const toRow = Math.min((page + 1) * pageSize, totalRows);
-  const rows = data.slice(page * pageSize, page * pageSize + pageSize);
+  const rows = filtered.slice(page * pageSize, page * pageSize + pageSize);
 
   const setPageSizeAndReset = (value: number) => {
     setPageSize(value);
@@ -55,23 +69,44 @@ export default function TurnosTable({ data }: { data: TurnoResumen[] }) {
             Sesiones de caja recientes con arqueo y diferencia.
           </Typography>
         </Box>
-        <ExportCsvButton
-          filename="turnos"
-          rows={data.map((t) => ({
-            Usuario: t.usuario_nombre,
-            Sucursal: t.sucursal_nombre,
-            Apertura: t.fecha_apertura,
-            Cierre: t.fecha_cierre,
-            Inicial: t.monto_inicial_centavos,
-            "Ventas efectivo": t.ventas_efectivo_centavos,
-            Ingresos: t.ingresos_centavos,
-            Egresos: t.egresos_centavos,
-            Esperado: t.monto_esperado_centavos,
-            Real: t.monto_final_real_centavos,
-            Diferencia: t.diferencia_centavos,
-            Estado: t.estado,
-          }))}
-        />
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
+          <TextField
+            size="small"
+            placeholder="Buscar turno..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0);
+            }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search fontSize="small" />
+                  </InputAdornment>
+                ),
+              },
+            }}
+            sx={{ minWidth: 220 }}
+          />
+          <ExportCsvButton
+            filename="turnos"
+            rows={filtered.map((t) => ({
+              Usuario: t.usuario_nombre,
+              Sucursal: t.sucursal_nombre,
+              Apertura: t.fecha_apertura,
+              Cierre: t.fecha_cierre,
+              Inicial: t.monto_inicial_centavos,
+              "Ventas efectivo": t.ventas_efectivo_centavos,
+              Ingresos: t.ingresos_centavos,
+              Egresos: t.egresos_centavos,
+              Esperado: t.monto_esperado_centavos,
+              Real: t.monto_final_real_centavos,
+              Diferencia: t.diferencia_centavos,
+              Estado: t.estado,
+            }))}
+          />
+        </Box>
       </Box>
 
       <BusinessTable

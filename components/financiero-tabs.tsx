@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Box, Chip, Tab, TableBody, TableCell, TableRow, Tabs, Typography } from "@mui/material";
-import { AccountBalanceWalletOutlined, ReceiptLongOutlined } from "@mui/icons-material";
+import { useMemo, useState } from "react";
+import { Box, Chip, InputAdornment, Tab, TableBody, TableCell, TableRow, Tabs, TextField, Typography } from "@mui/material";
+import { AccountBalanceWalletOutlined, ReceiptLongOutlined, Search } from "@mui/icons-material";
 import { deltaPorcentaje, dineroCentavos } from "@/lib/format";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import type { FinancieroResumen, VentaPorMetodo, AgingRow, CxPAgingRow, MovimientoCajaRow } from "@/lib/dashboard-types";
 import { BusinessTable, RowNumberCell } from "@/components/business-table";
 import { TablePager } from "@/components/table-pager";
@@ -31,7 +32,37 @@ function usePager(total: number, initialSize = 10) {
     },
     prev: () => setPage((p) => Math.max(0, p - 1)),
     next: () => setPage((p) => Math.min(totalPages - 1, p + 1)),
+    resetPage: () => setPage(0),
   };
+}
+
+function SearchField({
+  placeholder,
+  value,
+  onChange,
+}: {
+  placeholder: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <TextField
+      size="small"
+      placeholder={placeholder}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      slotProps={{
+        input: {
+          startAdornment: (
+            <InputAdornment position="start">
+              <Search fontSize="small" />
+            </InputAdornment>
+          ),
+        },
+      }}
+      sx={{ minWidth: 220 }}
+    />
+  );
 }
 
 export default function FinancieroTabs({
@@ -152,8 +183,15 @@ function ResumenMetodoGrid({ resumen }: { resumen: FinancieroResumen }) {
 }
 
 function AgingCxCTab({ data }: { data: AgingRow[] }) {
-  const pager = usePager(data.length);
-  const rows = pager.rows(data);
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 250);
+  const filtered = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    if (!q) return data;
+    return data.filter((c) => (c.cliente_nombre ?? "").toLowerCase().includes(q));
+  }, [data, debouncedSearch]);
+  const pager = usePager(filtered.length);
+  const rows = pager.rows(filtered);
 
   return (
     <Box sx={{ borderRadius: 2, border: "1px solid", borderColor: "divider", overflow: "hidden", bgcolor: "background.paper" }}>
@@ -166,19 +204,29 @@ function AgingCxCTab({ data }: { data: AgingRow[] }) {
             Saldo por cliente según días de atraso.
           </Typography>
         </Box>
-        <ExportCsvButton
-          filename="cuentas-por-cobrar"
-          rows={data.map((c) => ({
-            Cliente: c.cliente_nombre,
-            Vigente: c.deuda_vigente_centavos,
-            "1-30": c.deuda_1_30_centavos,
-            "31-60": c.deuda_31_60_centavos,
-            "60+": c.deuda_60_mas_centavos,
-            Total: c.total_deuda_centavos,
-            "Limite credito": c.limite_credito_centavos,
-            "Uso credito %": c.uso_credito_porcentaje,
-          }))}
-        />
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
+          <SearchField
+            placeholder="Buscar cliente..."
+            value={search}
+            onChange={(v) => {
+              setSearch(v);
+              pager.resetPage();
+            }}
+          />
+          <ExportCsvButton
+            filename="cuentas-por-cobrar"
+            rows={filtered.map((c) => ({
+              Cliente: c.cliente_nombre,
+              Vigente: c.deuda_vigente_centavos,
+              "1-30": c.deuda_1_30_centavos,
+              "31-60": c.deuda_31_60_centavos,
+              "60+": c.deuda_60_mas_centavos,
+              Total: c.total_deuda_centavos,
+              "Limite credito": c.limite_credito_centavos,
+              "Uso credito %": c.uso_credito_porcentaje,
+            }))}
+          />
+        </Box>
       </Box>
       <BusinessTable
         headers={[
@@ -230,7 +278,7 @@ function AgingCxCTab({ data }: { data: AgingRow[] }) {
               </TableCell>
             </TableRow>
           ))}
-          {data.length === 0 && (
+          {filtered.length === 0 && (
             <TableRow>
               <TableCell colSpan={9} align="center">
                 <EmptyState icon={<AccountBalanceWalletOutlined />} title="Sin cuentas por cobrar." />
@@ -243,7 +291,7 @@ function AgingCxCTab({ data }: { data: AgingRow[] }) {
         page={pager.page}
         pageSize={pager.pageSize}
         totalPages={pager.totalPages}
-        totalRows={data.length}
+        totalRows={filtered.length}
         fromRow={pager.fromRow}
         toRow={pager.toRow}
         canPreviousPage={pager.page > 0}
@@ -258,8 +306,21 @@ function AgingCxCTab({ data }: { data: AgingRow[] }) {
 }
 
 function MovimientosCajaTab({ data }: { data: MovimientoCajaRow[] }) {
-  const pager = usePager(data.length);
-  const rows = pager.rows(data);
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 250);
+  const filtered = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    if (!q) return data;
+    return data.filter(
+      (m) =>
+        (m.motivo ?? "").toLowerCase().includes(q) ||
+        (m.usuario_nombre ?? "").toLowerCase().includes(q) ||
+        (m.sucursal_nombre ?? "").toLowerCase().includes(q) ||
+        (m.tipo ?? "").toLowerCase().includes(q),
+    );
+  }, [data, debouncedSearch]);
+  const pager = usePager(filtered.length);
+  const rows = pager.rows(filtered);
 
   return (
     <Box sx={{ borderRadius: 2, border: "1px solid", borderColor: "divider", overflow: "hidden", bgcolor: "background.paper" }}>
@@ -272,18 +333,28 @@ function MovimientosCajaTab({ data }: { data: MovimientoCajaRow[] }) {
             Ingresos y egresos que afectan el efectivo del periodo.
           </Typography>
         </Box>
-        <ExportCsvButton
-          filename="movimientos-caja"
-          rows={data.map((m) => ({
-            Fecha: m.fecha,
-            Tipo: m.tipo,
-            Motivo: m.motivo,
-            Usuario: m.usuario_nombre,
-            Sucursal: m.sucursal_nombre,
-            "Afecta efectivo": m.afecta_efectivo ? "Sí" : "No",
-            Monto: m.monto_centavos,
-          }))}
-        />
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
+          <SearchField
+            placeholder="Buscar movimiento..."
+            value={search}
+            onChange={(v) => {
+              setSearch(v);
+              pager.resetPage();
+            }}
+          />
+          <ExportCsvButton
+            filename="movimientos-caja"
+            rows={filtered.map((m) => ({
+              Fecha: m.fecha,
+              Tipo: m.tipo,
+              Motivo: m.motivo,
+              Usuario: m.usuario_nombre,
+              Sucursal: m.sucursal_nombre,
+              "Afecta efectivo": m.afecta_efectivo ? "Sí" : "No",
+              Monto: m.monto_centavos,
+            }))}
+          />
+        </Box>
       </Box>
       <BusinessTable
         headers={[
@@ -330,7 +401,7 @@ function MovimientosCajaTab({ data }: { data: MovimientoCajaRow[] }) {
               </TableCell>
             </TableRow>
           ))}
-          {data.length === 0 && (
+          {filtered.length === 0 && (
             <TableRow>
               <TableCell colSpan={8} align="center">
                 <EmptyState icon={<AccountBalanceWalletOutlined />} title="Sin movimientos de caja en el periodo." />
@@ -343,7 +414,7 @@ function MovimientosCajaTab({ data }: { data: MovimientoCajaRow[] }) {
         page={pager.page}
         pageSize={pager.pageSize}
         totalPages={pager.totalPages}
-        totalRows={data.length}
+        totalRows={filtered.length}
         fromRow={pager.fromRow}
         toRow={pager.toRow}
         canPreviousPage={pager.page > 0}
@@ -358,8 +429,15 @@ function MovimientosCajaTab({ data }: { data: MovimientoCajaRow[] }) {
 }
 
 function AgingCxPTab({ data }: { data: CxPAgingRow[] }) {
-  const pager = usePager(data.length);
-  const rows = pager.rows(data);
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 250);
+  const filtered = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    if (!q) return data;
+    return data.filter((p) => (p.proveedor_nombre ?? "").toLowerCase().includes(q));
+  }, [data, debouncedSearch]);
+  const pager = usePager(filtered.length);
+  const rows = pager.rows(filtered);
 
   return (
     <Box sx={{ borderRadius: 2, border: "1px solid", borderColor: "divider", overflow: "hidden", bgcolor: "background.paper" }}>
@@ -372,18 +450,28 @@ function AgingCxPTab({ data }: { data: CxPAgingRow[] }) {
             Compras pendientes por proveedor según vencimiento.
           </Typography>
         </Box>
-        <ExportCsvButton
-          filename="cuentas-por-pagar"
-          rows={data.map((p) => ({
-            Proveedor: p.proveedor_nombre,
-            Vigente: p.deuda_vigente_centavos,
-            "1-30": p.deuda_1_30_centavos,
-            "31-60": p.deuda_31_60_centavos,
-            "60+": p.deuda_60_mas_centavos,
-            Total: p.total_deuda_centavos,
-            "Compras pend.": p.compras_pendientes,
-          }))}
-        />
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
+          <SearchField
+            placeholder="Buscar proveedor..."
+            value={search}
+            onChange={(v) => {
+              setSearch(v);
+              pager.resetPage();
+            }}
+          />
+          <ExportCsvButton
+            filename="cuentas-por-pagar"
+            rows={filtered.map((p) => ({
+              Proveedor: p.proveedor_nombre,
+              Vigente: p.deuda_vigente_centavos,
+              "1-30": p.deuda_1_30_centavos,
+              "31-60": p.deuda_31_60_centavos,
+              "60+": p.deuda_60_mas_centavos,
+              Total: p.total_deuda_centavos,
+              "Compras pend.": p.compras_pendientes,
+            }))}
+          />
+        </Box>
       </Box>
       <BusinessTable
         headers={[
@@ -425,7 +513,7 @@ function AgingCxPTab({ data }: { data: CxPAgingRow[] }) {
               <TableCell align="right">{p.compras_pendientes}</TableCell>
             </TableRow>
           ))}
-          {data.length === 0 && (
+          {filtered.length === 0 && (
             <TableRow>
               <TableCell colSpan={8} align="center">
                 <EmptyState icon={<ReceiptLongOutlined />} title="Sin cuentas por pagar." />
@@ -438,7 +526,7 @@ function AgingCxPTab({ data }: { data: CxPAgingRow[] }) {
         page={pager.page}
         pageSize={pager.pageSize}
         totalPages={pager.totalPages}
-        totalRows={data.length}
+        totalRows={filtered.length}
         fromRow={pager.fromRow}
         toRow={pager.toRow}
         canPreviousPage={pager.page > 0}

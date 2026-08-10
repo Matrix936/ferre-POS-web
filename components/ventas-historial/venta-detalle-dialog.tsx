@@ -1,8 +1,8 @@
 "use client";
 
-import { Box, CircularProgress, Drawer, IconButton, TableBody, TableCell, TableRow, Typography, useMediaQuery, useTheme } from "@mui/material";
-import { Close as CloseIcon, ReceiptLongOutlined } from "@mui/icons-material";
-import { useEffect, useState } from "react";
+import { Box, CircularProgress, Drawer, IconButton, InputAdornment, TableBody, TableCell, TableRow, TextField, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { Close as CloseIcon, ReceiptLongOutlined, Search } from "@mui/icons-material";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { dineroCentavos } from "@/lib/format";
 import type { HistorialVentaDetalle, HistorialVentaRow } from "@/lib/dashboard-types";
@@ -22,8 +22,19 @@ export default function VentaDetalleDialog({
   const [detalle, setDetalle] = useState<HistorialVentaDetalle[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const filteredDetalle = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return detalle;
+    return detalle.filter(
+      (d) =>
+        (d.descripcion ?? "").toLowerCase().includes(q) ||
+        (d.marca ?? "").toLowerCase().includes(q),
+    );
+  }, [detalle, search]);
 
   useEffect(() => {
     if (!open || !venta) return;
@@ -112,6 +123,24 @@ export default function VentaDetalleDialog({
             )}
 
             <Box sx={{ borderRadius: 2, border: "1px solid", borderColor: "divider", overflow: "hidden", bgcolor: "background.paper" }}>
+              <Box sx={{ p: 1.5, borderBottom: "1px solid", borderColor: "divider", display: "flex", justifyContent: "flex-end" }}>
+                <TextField
+                  size="small"
+                  placeholder="Buscar producto..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Search fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                  sx={{ minWidth: 220 }}
+                />
+              </Box>
               <BusinessTable
                 size={isMobile ? "small" : "medium"}
                 minWidth={560}
@@ -124,7 +153,7 @@ export default function VentaDetalleDialog({
                 ]}
               >
                 <TableBody>
-                  {detalle.map((d) => {
+                  {filteredDetalle.map((d) => {
                     const importe =
                       Number(d.cantidad ?? 0) * Number(d.precio_venta_pactado_centavos ?? 0) -
                       Number(d.descuento_aplicado_centavos ?? 0);
@@ -147,10 +176,10 @@ export default function VentaDetalleDialog({
                       </TableRow>
                     );
                   })}
-                  {detalle.length === 0 && (
+                  {filteredDetalle.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} align="center">
-                        <EmptyState icon={<ReceiptLongOutlined />} title="Sin productos registrados." />
+                        <EmptyState icon={<ReceiptLongOutlined />} title={search ? "Sin productos que coincidan." : "Sin productos registrados."} />
                       </TableCell>
                     </TableRow>
                   )}
