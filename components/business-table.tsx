@@ -212,6 +212,7 @@ export function BusinessTable({
             tableLayout: "auto",
             "& th, & td": {
               whiteSpace: "nowrap",
+              textAlign: "center",
             },
             "& .MuiTableHead-root .MuiTableCell-root": {
               py: densityStyles.headerPy,
@@ -223,6 +224,7 @@ export function BusinessTable({
             "& .MuiTableBody-root .MuiTableCell-root": {
               py: densityStyles.bodyPy,
               verticalAlign: "middle",
+              textAlign: "center",
             },
             ...sx,
           }}
