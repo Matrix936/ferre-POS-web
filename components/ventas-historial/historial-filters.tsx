@@ -44,7 +44,7 @@ export default function HistorialFilters({
   // Estado local para edición fluida del folio; la búsqueda real se dispara
   // cuando el valor debounceado cambia (mismo patrón que el escritorio).
   const [folioLocal, setFolioLocal] = useState(value.folio);
-  const debouncedFolio = useDebouncedValue(folioLocal, 300);
+  const debouncedFolio = useDebouncedValue(folioLocal, 2000);
 
   const commit = (next: HistorialFilterValue) => {
     const params = new URLSearchParams(window.location.search);
