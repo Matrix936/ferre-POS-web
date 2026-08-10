@@ -684,11 +684,15 @@ begin
           and c.saldo_deudor > 0;
     end if;
 
-    -- Cuentas por pagar: compras pendientes.
-    select coalesce(sum(total_centavos), 0)
+    -- Cuentas por pagar: compras pendientes o parciales (saldo restante).
+    select coalesce(sum(greatest(c.total_centavos - coalesce((
+        select sum(pg.monto * 100)::bigint
+        from public.pagos_compras pg
+        where pg.compra_id = c.id
+    ), 0), 0)), 0)
       into v_cxp
     from public.compras c
-    where c.estado_pago = 'PENDIENTE'
+    where c.estado_pago in ('PENDIENTE', 'PARCIAL')
       and (p_sucursal_id is null or c.sucursal_id = p_sucursal_id);
 
     return query
@@ -783,23 +787,43 @@ as $$
     select
         pr.id,
         pr.nombre,
-        coalesce(sum(c.total_centavos), 0) as total_deuda,
+        coalesce(sum(greatest(c.total_centavos - coalesce((
+            select sum(pg.monto * 100)::bigint
+            from public.pagos_compras pg
+            where pg.compra_id = c.id
+        ), 0), 0)), 0) as total_deuda,
         coalesce(sum(case
             when c.fecha_vencimiento is null or c.fecha_vencimiento >= now()
-            then c.total_centavos else 0 end), 0) as deuda_vigente,
+            then greatest(c.total_centavos - coalesce((
+                select sum(pg.monto * 100)::bigint
+                from public.pagos_compras pg
+                where pg.compra_id = c.id
+            ), 0), 0) else 0 end), 0) as deuda_vigente,
         coalesce(sum(case
             when c.fecha_vencimiento < now() and c.fecha_vencimiento >= now() - interval '30 days'
-            then c.total_centavos else 0 end), 0) as deuda_1_30,
+            then greatest(c.total_centavos - coalesce((
+                select sum(pg.monto * 100)::bigint
+                from public.pagos_compras pg
+                where pg.compra_id = c.id
+            ), 0), 0) else 0 end), 0) as deuda_1_30,
         coalesce(sum(case
             when c.fecha_vencimiento < now() - interval '30 days' and c.fecha_vencimiento >= now() - interval '60 days'
-            then c.total_centavos else 0 end), 0) as deuda_31_60,
+            then greatest(c.total_centavos - coalesce((
+                select sum(pg.monto * 100)::bigint
+                from public.pagos_compras pg
+                where pg.compra_id = c.id
+            ), 0), 0) else 0 end), 0) as deuda_31_60,
         coalesce(sum(case
             when c.fecha_vencimiento < now() - interval '60 days'
-            then c.total_centavos else 0 end), 0) as deuda_60_mas,
+            then greatest(c.total_centavos - coalesce((
+                select sum(pg.monto * 100)::bigint
+                from public.pagos_compras pg
+                where pg.compra_id = c.id
+            ), 0), 0) else 0 end), 0) as deuda_60_mas,
         count(distinct c.id) as compras_pendientes
     from public.proveedores pr
     inner join public.compras c on c.proveedor_id = pr.id
-    where c.estado_pago = 'PENDIENTE'
+    where c.estado_pago in ('PENDIENTE', 'PARCIAL')
       and pr.eliminado = false
       and (p_sucursal_id is null or c.sucursal_id = p_sucursal_id)
     group by pr.id, pr.nombre
