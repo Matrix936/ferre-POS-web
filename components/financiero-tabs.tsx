@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Box, Chip, InputAdornment, Tab, TableBody, TableCell, TableRow, Tabs, TextField, Typography } from "@mui/material";
+import { Box, Chip, CircularProgress, InputAdornment, Tab, TableBody, TableCell, TableRow, Tabs, TextField, Typography } from "@mui/material";
 import { AccountBalanceWalletOutlined, ReceiptLongOutlined, Search } from "@mui/icons-material";
 import { deltaPorcentaje, dineroCentavos } from "@/lib/format";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
@@ -39,10 +39,12 @@ function usePager(total: number, initialSize = 10) {
 function SearchField({
   placeholder,
   value,
+  debounced,
   onChange,
 }: {
   placeholder: string;
   value: string;
+  debounced: string;
   onChange: (v: string) => void;
 }) {
   return (
@@ -58,6 +60,11 @@ function SearchField({
               <Search fontSize="small" />
             </InputAdornment>
           ),
+          endAdornment: value !== debounced ? (
+            <InputAdornment position="end">
+              <CircularProgress size={16} thickness={5} />
+            </InputAdornment>
+          ) : undefined,
         },
       }}
       sx={{ minWidth: 220 }}
@@ -208,6 +215,7 @@ function AgingCxCTab({ data }: { data: AgingRow[] }) {
           <SearchField
             placeholder="Buscar cliente..."
             value={search}
+            debounced={debouncedSearch}
             onChange={(v) => {
               setSearch(v);
               pager.resetPage();
@@ -337,6 +345,7 @@ function MovimientosCajaTab({ data }: { data: MovimientoCajaRow[] }) {
           <SearchField
             placeholder="Buscar movimiento..."
             value={search}
+            debounced={debouncedSearch}
             onChange={(v) => {
               setSearch(v);
               pager.resetPage();
@@ -454,6 +463,7 @@ function AgingCxPTab({ data }: { data: CxPAgingRow[] }) {
           <SearchField
             placeholder="Buscar proveedor..."
             value={search}
+            debounced={debouncedSearch}
             onChange={(v) => {
               setSearch(v);
               pager.resetPage();

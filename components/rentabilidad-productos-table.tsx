@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Box, Chip, InputAdornment, TableBody, TableCell, TableRow, TextField, Typography } from "@mui/material";
+import { Box, Chip, CircularProgress, InputAdornment, TableBody, TableCell, TableRow, TextField, Typography } from "@mui/material";
 import { Search, TrendingUpOutlined } from "@mui/icons-material";
 import { cantidad, dineroCentavos } from "@/lib/format";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
@@ -67,6 +67,11 @@ export default function RentabilidadProductosTable({ data }: { data: ProductoRen
                     <Search fontSize="small" />
                   </InputAdornment>
                 ),
+                endAdornment: search !== debouncedSearch ? (
+                  <InputAdornment position="end">
+                    <CircularProgress size={16} thickness={5} />
+                  </InputAdornment>
+                ) : undefined,
               },
             }}
             sx={{ minWidth: 220 }}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Box, Chip, InputAdornment, TableBody, TableCell, TableRow, TextField, Typography } from "@mui/material";
+import { Box, Chip, CircularProgress, InputAdornment, TableBody, TableCell, TableRow, TextField, Typography } from "@mui/material";
 import { Search, StorefrontOutlined } from "@mui/icons-material";
 import { dineroCentavos } from "@/lib/format";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
@@ -85,6 +85,11 @@ export default function TurnosTable({ data }: { data: TurnoResumen[] }) {
                     <Search fontSize="small" />
                   </InputAdornment>
                 ),
+                endAdornment: search !== debouncedSearch ? (
+                  <InputAdornment position="end">
+                    <CircularProgress size={16} thickness={5} />
+                  </InputAdornment>
+                ) : undefined,
               },
             }}
             sx={{ minWidth: 220 }}

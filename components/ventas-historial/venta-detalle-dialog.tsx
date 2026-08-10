@@ -5,6 +5,7 @@ import { Close as CloseIcon, ReceiptLongOutlined, Search } from "@mui/icons-mate
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { dineroCentavos } from "@/lib/format";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import type { HistorialVentaDetalle, HistorialVentaRow } from "@/lib/dashboard-types";
 import { BusinessTable } from "@/components/business-table";
 import { EmptyState } from "@/components/empty-state";
@@ -23,18 +24,19 @@ export default function VentaDetalleDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 250);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const filteredDetalle = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = debouncedSearch.trim().toLowerCase();
     if (!q) return detalle;
     return detalle.filter(
       (d) =>
         (d.descripcion ?? "").toLowerCase().includes(q) ||
         (d.marca ?? "").toLowerCase().includes(q),
     );
-  }, [detalle, search]);
+  }, [detalle, debouncedSearch]);
 
   useEffect(() => {
     if (!open || !venta) return;
@@ -136,6 +138,11 @@ export default function VentaDetalleDialog({
                           <Search fontSize="small" />
                         </InputAdornment>
                       ),
+                      endAdornment: search !== debouncedSearch ? (
+                        <InputAdornment position="end">
+                          <CircularProgress size={16} thickness={5} />
+                        </InputAdornment>
+                      ) : undefined,
                     },
                   }}
                   sx={{ minWidth: 220 }}
