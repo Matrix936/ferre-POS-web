@@ -3,17 +3,18 @@ import { dashboardScope } from "@/lib/dashboard-scope";
 import { deltaPorcentaje, dineroCentavos, periodoAnterior } from "@/lib/format";
 import { fila, type RentabilidadResumen, type ProductoRentabilidad } from "@/lib/dashboard-types";
 import DateRangePicker from "@/components/date-range-picker";
+import SucursalFilter from "@/components/sucursal-filter";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { ExecutiveCard } from "@/components/executive-card";
 import { SimpleBarChart, SimpleDonutChart } from "@/components/simple-charts";
 import RentabilidadProductosTable from "@/components/rentabilidad-productos-table";
 
 type Props = {
-  searchParams: Promise<{ rango?: string }>;
+  searchParams: Promise<{ rango?: string; sucursal?: string }>;
 };
 
 export default async function RentabilidadPage({ searchParams }: Props) {
-  const { supabase, user, rango, desde, hasta, esDueño, p_sucursal_id } = await dashboardScope(searchParams);
+  const { supabase, user, rango, desde, hasta, esDueño, p_sucursal_id, sucursal, sucursales, sucursalNombre } = await dashboardScope(searchParams);
 
   const iso = { p_desde: desde, p_hasta: hasta };
   const prev = periodoAnterior(desde, hasta);
@@ -67,10 +68,13 @@ export default async function RentabilidadPage({ searchParams }: Props) {
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Utilidad generada en el periodo
-              {esDueño ? " · todas las sucursales" : null}
+              {esDueño ? (sucursalNombre ? ` · ${sucursalNombre}` : " · todas las sucursales") : null}
             </Typography>
           </Box>
-          <DateRangePicker rango={rango} />
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+            {esDueño && <SucursalFilter sucursal={sucursal} sucursales={sucursales} />}
+            <DateRangePicker rango={rango} />
+          </Box>
         </Box>
 
         <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", xl: "repeat(4, 1fr)" }, mb: 2 }}>

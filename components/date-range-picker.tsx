@@ -23,7 +23,15 @@ export default function DateRangePicker({ rango }: { rango: Rango }) {
     if (!next || next === localRango) return;
     setLocalRango(next);
     startTransition(() => {
-      router.push(next === "30d" ? pathname : `${pathname}?rango=${next}`);
+      // Conserva otros parámetros (p. ej. ?sucursal=) al cambiar el rango.
+      const params = new URLSearchParams(window.location.search);
+      if (next === "30d") {
+        params.delete("rango");
+      } else {
+        params.set("rango", next);
+      }
+      const qs = params.toString();
+      router.push(qs ? `${pathname}?${qs}` : pathname);
     });
   }
 

@@ -1,7 +1,6 @@
 import { Box, Chip, Paper, Typography } from "@mui/material";
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import { RANGOS, rangoAFechas, periodoAnterior, deltaPorcentaje, dineroCentavos, cantidad, type Rango } from "@/lib/format";
+import { dashboardScope } from "@/lib/dashboard-scope";
+import { deltaPorcentaje, dineroCentavos, cantidad, periodoAnterior } from "@/lib/format";
 import {
   fila,
   type IndicadorVentas,
@@ -15,6 +14,7 @@ import {
   type VentaReciente,
 } from "@/lib/dashboard-types";
 import DateRangePicker from "@/components/date-range-picker";
+import SucursalFilter from "@/components/sucursal-filter";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { ExecutiveCard } from "@/components/executive-card";
 import { SimpleDonutChart } from "@/components/simple-charts";
@@ -25,28 +25,11 @@ import InventarioBajoStockTable from "@/components/inventario-bajo-stock-table";
 import VentasRecientesCard from "@/components/ventas-recientes-card";
 
 type Props = {
-  searchParams: Promise<{ rango?: string }>;
+  searchParams: Promise<{ rango?: string; sucursal?: string }>;
 };
 
 export default async function DashboardPage({ searchParams }: Props) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  const sp = await searchParams;
-  const raw = sp.rango;
-  const rango: Rango = RANGOS.some((r) => r.value === raw) ? (raw as Rango) : "30d";
-  const { desde, hasta } = rangoAFechas(rango);
-
-  const rol = user.app_metadata?.role ?? null;
-  const esDueño = rol === "SUPERADMIN" || rol === "ADMIN";
-  const p_sucursal_id = esDueño ? null : (user.app_metadata?.sucursal_id ?? null);
+  const { supabase, user, rol, rango, desde, hasta, esDueño, p_sucursal_id, sucursal, sucursales, sucursalNombre } = await dashboardScope(searchParams);
 
   const rpcOpts = { p_sucursal_id };
   const iso = { p_desde: desde, p_hasta: hasta };
@@ -82,6 +65,9 @@ export default async function DashboardPage({ searchParams }: Props) {
   const indPrev = fila<IndicadorVentas>(dVentasPrev);
   const rentPrev = fila<RentabilidadResumen>(dRentPrev);
 
+  // Si se seleccionó una sucursal, acota la vista por-sucursal a la elegida.
+  const porSucFiltrado = p_sucursal_id ? porSuc.filter((s) => s.sucursal_id === p_sucursal_id) : porSuc;
+
   const donutData = metodo.map((m) => ({
     label: (m.metodo_pago?.[0]?.toUpperCase() ?? "") + (m.metodo_pago?.slice(1) ?? ""),
     value: Number(m.total_centavos ?? 0),
@@ -116,10 +102,13 @@ export default async function DashboardPage({ searchParams }: Props) {
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Conectado como <strong>{user.email}</strong>
-              {esDueño ? <> · <strong>todas las sucursales</strong></> : user.app_metadata?.sucursal_id ? <> · sucursal</> : null}
+              {esDueño ? sucursalNombre ? <> · <strong>{sucursalNombre}</strong></> : <> · <strong>todas las sucursales</strong></> : user.app_metadata?.sucursal_id ? <> · sucursal</> : null}
             </Typography>
           </Box>
-          <DateRangePicker rango={rango} />
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+            {esDueño && <SucursalFilter sucursal={sucursal} sucursales={sucursales} />}
+            <DateRangePicker rango={rango} />
+          </Box>
         </Box>
 
         <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", xl: "repeat(4, 1fr)" }, mb: 2 }}>
@@ -157,7 +146,7 @@ export default async function DashboardPage({ searchParams }: Props) {
 
         <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, mb: 2 }}>
           <VentasPorDiaChart data={porDia} prev={porDiaPrev} />
-          <VentasPorSucursalChart data={porSuc} />
+          <VentasPorSucursalChart data={porSucFiltrado} />
         </Box>
 
         <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "1.3fr 0.7fr" }, mb: 2, alignItems: "stretch" }}>
