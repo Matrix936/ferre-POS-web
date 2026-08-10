@@ -6,6 +6,9 @@ import { Box, LinearProgress, MenuItem, TextField } from "@mui/material";
 import { StorefrontOutlined } from "@mui/icons-material";
 import { useTopbarHeight } from "@/components/layout/topbar-height-context";
 
+// Valor sentinela para la opción "Todas": MUI no muestra texto si el value es "".
+const TODAS = "__todas__";
+
 export default function SucursalFilter({
   sucursal,
   sucursales,
@@ -25,11 +28,12 @@ export default function SucursalFilter({
   }, [sucursal]);
 
   function commit(next: string) {
-    if (next === local) return;
-    setLocal(next);
+    const nextLocal = next === TODAS ? "" : next;
+    if (nextLocal === local) return;
+    setLocal(nextLocal);
     const params = new URLSearchParams(window.location.search);
-    if (next) {
-      params.set("sucursal", next);
+    if (nextLocal) {
+      params.set("sucursal", nextLocal);
     } else {
       params.delete("sucursal");
     }
@@ -45,14 +49,14 @@ export default function SucursalFilter({
         select
         size="small"
         label="Sucursal"
-        value={local}
+        value={local || TODAS}
         onChange={(e) => commit(e.target.value)}
         slotProps={{
           select: { startAdornment: <StorefrontOutlined fontSize="small" sx={{ mr: 0.75, color: "text.secondary" }} /> },
         }}
         sx={{ minWidth: { xs: "100%", sm: 190 } }}
       >
-        <MenuItem value="">Todas</MenuItem>
+        <MenuItem value={TODAS}>Todas</MenuItem>
         {sucursales.map((s) => (
           <MenuItem key={s.id} value={s.id}>
             {s.nombre}
