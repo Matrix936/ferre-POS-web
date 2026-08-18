@@ -43,30 +43,44 @@ export function TablePager({
     <Box
       sx={{
         display: "flex",
-        alignItems: "center",
+        flexDirection: { xs: "column", sm: "row" },
+        alignItems: { xs: "stretch", sm: "center" },
         justifyContent: "space-between",
-        gap: 2,
-        px: 2,
+        gap: { xs: 1, sm: 2 },
+        px: { xs: 1, sm: 2 },
         py: 1.5,
         borderTop: "1px solid",
         borderColor: "divider",
-        flexWrap: "wrap",
       }}
     >
-      <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{ fontWeight: 600, textAlign: { xs: "center", sm: "left" } }}
+      >
         {summary ?? (totalRows === 0 ? `Total: 0 ${rowLabel}` : `Mostrando ${fromRow}-${toRow} de ${totalRows} ${rowLabel}`)}
       </Typography>
 
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, ml: "auto" }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Typography variant="body2" color="text.secondary">
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: { xs: "space-between", sm: "flex-end" },
+          gap: { xs: 1, sm: 1.5 },
+          flexWrap: "wrap",
+          minWidth: 0,
+          width: { xs: "100%", sm: "auto" },
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ display: { xs: "none", md: "inline" } }}>
             Mostrar:
           </Typography>
           <Select
             size="small"
             value={pageSize}
             onChange={(event) => onPageSizeChange(Number(event.target.value))}
-            sx={{ minWidth: 76, "& .MuiSelect-select": { py: 0.75 } }}
+            sx={{ minWidth: { xs: 64, sm: 76 }, "& .MuiSelect-select": { py: 0.75 } }}
           >
             {LOCAL_TABLE_PAGE_SIZE_OPTIONS.map((option) => (
               <MenuItem key={option} value={option}>
@@ -78,7 +92,11 @@ export function TablePager({
         <IconButton size="small" onClick={onPreviousPage} disabled={!canPreviousPage} aria-label="Página anterior">
           <ChevronLeft fontSize="small" />
         </IconButton>
-        <Typography variant="body2" color="text.secondary" sx={{ minWidth: 118, textAlign: "center", fontWeight: 600 }}>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ minWidth: 0, textAlign: "center", whiteSpace: "nowrap", fontWeight: 600, px: 0.5 }}
+        >
           Página {page + 1} de {totalPages}
         </Typography>
         <IconButton size="small" onClick={onNextPage} disabled={!canNextPage} aria-label="Página siguiente">
